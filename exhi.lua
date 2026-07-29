@@ -48,12 +48,14 @@ local GUI_SCALE = 1.7 -- 340 * 1.7 = 578 (close to 580)
 local REAL_SIZE = Vector2.new(340, 340)
 local SCALED_SIZE = REAL_SIZE * GUI_SCALE
 
+local GITHUB_ICONS_URL = "https://raw.githubusercontent.com/maygods/exhi/refs/heads/main/Icons/Icon_%s.png"
+
 local ExhibitionLib = {
     Instances = {},
     Windows = {},
     Icons = {
-        Combat = "⚔", Player = "👤", Movement = "🏃", Visuals = "👁",
-        Other = "⚙", Colors = "🎨", Minigames = "🎮", Settings = "⚙"
+        Combat = "E", Player = "F", Movement = "J", Visuals = "C",
+        Other = "I", Colors = "H", Minigames = "A", Settings = "G"
     },
     ThemeInstances = {}
 }
@@ -359,13 +361,46 @@ function ExhibitionLib:CreateWindow(cfg)
             BackgroundTransparency = 1,
             Position = UDim2.new(0, 0, 0, (tabIndex - 1) * 40 * GUI_SCALE),
             Size = UDim2.new(1, 0, 0, 40 * GUI_SCALE),
-            Font = Fonts.Regular,
-            Text = tabIcon,
-            TextColor3 = ThemeColor("SidebarInactive"),
-            TextSize = 18 * GUI_SCALE,
+            Text = "",
             Parent = tabsContainer
         })
-        RegisterOpacity(tabBtn, "TextTransparency")
+        
+        -- Fallback to text if icon isn't A-Z mapped (like if they use an emoji custom icon)
+        local isMapped = string.match(tabIcon, "^[A-Z]$")
+        
+        local tabIconLbl
+        if isMapped then
+            local iconPath = "ExhibitionLib_Icon_" .. tabIcon .. ".png"
+            if not isfile(iconPath) then
+                pcall(function()
+                    writefile(iconPath, game:HttpGet(string.format(GITHUB_ICONS_URL, tabIcon)))
+                end)
+            end
+            
+            tabIconLbl = Create("ImageLabel", {
+                BackgroundTransparency = 1,
+                Position = UDim2.new(0, 0, 0, 0),
+                Size = UDim2.new(1, 0, 1, 0),
+                Image = getcustomasset(iconPath),
+                ImageColor3 = ThemeColor("SidebarInactive"),
+                ZIndex = 2,
+                Parent = tabBtn
+            })
+            RegisterOpacity(tabIconLbl, "ImageTransparency")
+        else
+            tabIconLbl = Create("TextLabel", {
+                BackgroundTransparency = 1,
+                Position = UDim2.new(0, 0, 0, 0),
+                Size = UDim2.new(1, 0, 1, 0),
+                Font = Fonts.Regular,
+                Text = tabIcon,
+                TextColor3 = ThemeColor("SidebarInactive"),
+                TextSize = 18 * GUI_SCALE,
+                ZIndex = 2,
+                Parent = tabBtn
+            })
+            RegisterOpacity(tabIconLbl, "TextTransparency")
+        end
         
         local tabContent = Create("Frame", {
             BackgroundTransparency = 1,
@@ -374,17 +409,29 @@ function ExhibitionLib:CreateWindow(cfg)
             Parent = contentArea
         })
         
-        local tabObj = { Name = tabName, Btn = tabBtn, Content = tabContent, Index = tabIndex }
+        local tabObj = { Name = tabName, Btn = tabBtn, Icon = tabIcon, IconLbl = tabIconLbl, Content = tabContent, Index = tabIndex }
         table.insert(self.Tabs, tabObj)
         
         local function SelectTab()
             if self.ActiveTab == tabObj then return end
-            self.ActiveTab = tabObj
             
-            for _, t in ipairs(self.Tabs) do
-                t.Content.Visible = (t == tabObj)
-                TweenService:Create(t.Btn, TweenInfo.new(0.2), {TextColor3 = t == tabObj and Colors.SidebarActive or Colors.SidebarInactive}):Play()
+            if self.ActiveTab then
+                if string.match(self.ActiveTab.Icon, "^[A-Z]$") then
+                    TweenService:Create(self.ActiveTab.IconLbl, TweenInfo.new(0.1), {ImageColor3 = Colors.SidebarInactive}):Play()
+                else
+                    TweenService:Create(self.ActiveTab.IconLbl, TweenInfo.new(0.1), {TextColor3 = Colors.SidebarInactive}):Play()
+                end
+                self.ActiveTab.Content.Visible = false
             end
+            
+            self.ActiveTab = tabObj
+            if string.match(self.ActiveTab.Icon, "^[A-Z]$") then
+                TweenService:Create(self.ActiveTab.IconLbl, TweenInfo.new(0.1), {ImageColor3 = Colors.SidebarActive}):Play()
+            else
+                TweenService:Create(self.ActiveTab.IconLbl, TweenInfo.new(0.1), {TextColor3 = Colors.SidebarActive}):Play()
+            end
+            
+            self.ActiveTab.Content.Visible = true
             
             -- Move active indicator
             local targetY = (tabIndex - 1) * 40 * GUI_SCALE
@@ -394,13 +441,21 @@ function ExhibitionLib:CreateWindow(cfg)
         tabBtn.MouseButton1Click:Connect(SelectTab)
         tabBtn.MouseEnter:Connect(function()
             if self.ActiveTab ~= tabObj then
-                TweenService:Create(tabBtn, TweenInfo.new(0.1), {TextColor3 = ThemeColor("SidebarHover")}):Play()
+                if isMapped then
+                    TweenService:Create(tabIconLbl, TweenInfo.new(0.1), {ImageColor3 = Colors.SidebarHover}):Play()
+                else
+                    TweenService:Create(tabIconLbl, TweenInfo.new(0.1), {TextColor3 = Colors.SidebarHover}):Play()
+                end
                 if tabName then ShowTooltip(tabName) end
             end
         end)
         tabBtn.MouseLeave:Connect(function()
             if self.ActiveTab ~= tabObj then
-                TweenService:Create(tabBtn, TweenInfo.new(0.1), {TextColor3 = ThemeColor("SidebarInactive")}):Play()
+                if isMapped then
+                    TweenService:Create(tabIconLbl, TweenInfo.new(0.1), {ImageColor3 = Colors.SidebarInactive}):Play()
+                else
+                    TweenService:Create(tabIconLbl, TweenInfo.new(0.1), {TextColor3 = Colors.SidebarInactive}):Play()
+                end
             end
             HideTooltip()
         end)
