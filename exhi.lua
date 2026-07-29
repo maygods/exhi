@@ -116,15 +116,16 @@ RunService.RenderStepped:Connect(function(dt)
     -- Update all registered elements with opacity
     for _, obj in ipairs(ExhibitionLib.Instances) do
         if obj.Type == "Transparency" then
-            obj.Inst[obj.Prop] = 1 - ((1 - obj.Base) * opacity)
+            local mult = obj.IsBG and (ExhibitionLib.OpacityMultiplier or 1.0) or 1.0
+            obj.Inst[obj.Prop] = 1 - ((1 - obj.Base) * GlobalOpacity.Value * mult)
         elseif obj.Type == "Gradient" then
             -- Optional dynamic gradient alpha
         end
     end
 end)
 
-local function RegisterOpacity(inst, prop, baseTrans)
-    table.insert(ExhibitionLib.Instances, { Type = "Transparency", Inst = inst, Prop = prop, Base = baseTrans or 0 })
+local function RegisterOpacity(inst, prop, baseTrans, isBackground)
+    table.insert(ExhibitionLib.Instances, { Type = "Transparency", Inst = inst, Prop = prop, Base = baseTrans or 0, IsBG = isBackground })
     inst[prop] = 1 -- Start transparent
 end
 
@@ -217,7 +218,7 @@ function ExhibitionLib:CreateWindow(cfg)
         Size = UDim2.new(0, SCALED_SIZE.X, 0, SCALED_SIZE.Y),
         Parent = sg
     })
-    RegisterOpacity(window, "BackgroundTransparency")
+    RegisterOpacity(window, "BackgroundTransparency", 0, true)
     
     local uiScale = Create("UIScale", {
         Scale = 1.0,
@@ -237,7 +238,7 @@ function ExhibitionLib:CreateWindow(cfg)
         Size = UDim2.new(1,-2,1,-2),
         Parent = innerBorder
     })
-    RegisterOpacity(main, "BackgroundTransparency")
+    RegisterOpacity(main, "BackgroundTransparency", 0, true)
     
     -- Top Rainbow Bar
     local rainbowBar = Create("Frame", {
@@ -367,6 +368,7 @@ function ExhibitionLib:CreateWindow(cfg)
         Size = UDim2.new(0, 37 * GUI_SCALE, 1, -1 * GUI_SCALE),
         Parent = main
     })
+    RegisterOpacity(sidebar, "BackgroundTransparency", 0, true)
     
     local sidebarActiveBG = Create("Frame", {
         BackgroundColor3 = ThemeColor("MainFill"),
@@ -377,9 +379,9 @@ function ExhibitionLib:CreateWindow(cfg)
     })
     local activeTop = Create("Frame", { BackgroundColor3 = ThemeColor("Border1"), BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1), ZIndex = 3, Parent = sidebarActiveBG })
     local activeBot = Create("Frame", { BackgroundColor3 = ThemeColor("Border1"), BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -1), Size = UDim2.new(1, 0, 0, 1), ZIndex = 3, Parent = sidebarActiveBG })
-    RegisterOpacity(sidebarActiveBG, "BackgroundTransparency")
-    RegisterOpacity(activeTop, "BackgroundTransparency")
-    RegisterOpacity(activeBot, "BackgroundTransparency")
+    RegisterOpacity(sidebarActiveBG, "BackgroundTransparency", 0, true)
+    RegisterOpacity(activeTop, "BackgroundTransparency", 0, true)
+    RegisterOpacity(activeBot, "BackgroundTransparency", 0, true)
     
     local tabsContainer = Create("Frame", {
         BackgroundTransparency = 1,
@@ -621,7 +623,7 @@ function ExhibitionLib:CreateWindow(cfg)
             end
             
             RecalculateCol()
-            RegisterOpacity(secOut, "BackgroundTransparency")
+            RegisterOpacity(secOut, "BackgroundTransparency", 0, true)
             
             local secIn = Create("Frame", {
                 BackgroundColor3 = ThemeColor("GroupBorderIn"),
