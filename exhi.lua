@@ -45,7 +45,7 @@ local Fonts = {
     Regular = Enum.Font.SourceSans,
 }
 
-local GUI_SCALE = 1.7 -- 340 * 1.7 = 578 (close to 580)
+local GUI_SCALE = 2.0
 local REAL_SIZE = Vector2.new(340, 340)
 local SCALED_SIZE = REAL_SIZE * GUI_SCALE
 
@@ -395,10 +395,12 @@ function ExhibitionLib:CreateWindow(cfg)
             
             tabIconLbl = Create("ImageLabel", {
                 BackgroundTransparency = 1,
-                Position = UDim2.new(0, 0, 0, 0),
-                Size = UDim2.new(1, 0, 1, 0),
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                Position = UDim2.new(0.5, 0, 0.5, 0),
+                Size = UDim2.new(0, 20 * GUI_SCALE, 0, 20 * GUI_SCALE),
                 Image = getcustomasset(iconPath),
                 ImageColor3 = ThemeColor("SidebarInactive"),
+                ScaleType = Enum.ScaleType.Fit,
                 ZIndex = 2,
                 Parent = tabBtn
             })
@@ -594,11 +596,13 @@ function ExhibitionLib:CreateWindow(cfg)
                     Parent = secBody
                 })
                 
-                local boxOut = Create("Frame", {
+                local boxOut = Create("TextButton", {
                     BackgroundColor3 = ThemeColor("GroupBorderOut"),
                     BorderSizePixel = 0,
                     Size = UDim2.new(0, 6 * GUI_SCALE, 0, 6 * GUI_SCALE),
                     Position = UDim2.new(0, 0, 0.5, -3 * GUI_SCALE),
+                    Text = "",
+                    AutoButtonColor = false,
                     Parent = btn
                 })
                 RegisterOpacity(boxOut, "BackgroundTransparency")
@@ -636,6 +640,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 end
                 
                 btn.MouseButton1Click:Connect(function() SetState(not state) end)
+                boxOut.MouseButton1Click:Connect(function() SetState(not state) end)
                 btn.MouseEnter:Connect(function() 
                     TweenService:Create(boxIn, TweenInfo.new(0.1), {BackgroundTransparency = 0.84}):Play() -- approx 40 alpha
                     if ecfg.Description then ShowTooltip(ecfg.Description) end
