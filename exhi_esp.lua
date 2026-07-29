@@ -69,7 +69,7 @@ local function GetBoundingBox(char)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return nil end
     local cf = hrp.CFrame
-    local size = Vector3.new(2.5, 5.5, 2.5) -- Tighter bounds for Roblox characters (less huge up close)
+    local size = Vector3.new(2, 5.2, 2) -- Even tighter bounds to look more like Minecraft 0.6x1.8 block hitboxes
     
     local corners = {
         cf * CFrame.new(size.X/2, size.Y/2, size.Z/2),
@@ -306,6 +306,20 @@ local function UpdateESP()
 end
 
 RunService.RenderStepped:Connect(UpdateESP)
+
+task.spawn(function()
+    while true do
+        task.wait(0.1) -- 100ms check
+        for plr, cache in pairs(ESP.Cache) do
+            if not plr or not plr.Parent or not plr:IsDescendantOf(Players) then
+                if cache and cache.Container then
+                    cache.Container:Destroy()
+                end
+                ESP.Cache[plr] = nil
+            end
+        end
+    end
+end)
 
 Players.PlayerRemoving:Connect(function(plr)
     if ESP.Cache[plr] then
