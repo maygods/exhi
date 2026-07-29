@@ -207,6 +207,11 @@ function ExhibitionLib:CreateWindow(cfg)
     })
     RegisterOpacity(window, "BackgroundTransparency")
     
+    local uiScale = Create("UIScale", {
+        Scale = 1.0,
+        Parent = window
+    })
+    
     -- Nested Borders
     local b2 = DrawBorder(window, {Colors.Black, Colors.Border2})
     local b3 = DrawBorder(b2, {Colors.Black, Colors.Border2})
@@ -277,9 +282,7 @@ function ExhibitionLib:CreateWindow(cfg)
         end
     end)
     
-    -- Resize Handle (bottom-right corner)
-    local MIN_W = 200 * GUI_SCALE
-    local MIN_H = 150 * GUI_SCALE
+    local MIN_SCALE = 0.5
     local resizeHandle = Create("TextButton", {
         BackgroundTransparency = 1,
         Position = UDim2.new(1, -10, 1, -10),
@@ -297,12 +300,12 @@ function ExhibitionLib:CreateWindow(cfg)
     Create("Frame", { BackgroundColor3 = Colors.TextMuted, BorderSizePixel = 0, Position = UDim2.new(0, 8, 0, 2), Size = UDim2.new(0, 2, 0, 2), ZIndex = 51, Parent = resizeHandle })
     
     local resizing = false
-    local resizeStart, startSize
+    local resizeStart, startScale
     resizeHandle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             resizing = true
             resizeStart = input.Position
-            startSize = window.AbsoluteSize
+            startScale = uiScale.Scale
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     resizing = false
@@ -313,9 +316,10 @@ function ExhibitionLib:CreateWindow(cfg)
     UserInputService.InputChanged:Connect(function(input)
         if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
             local delta = input.Position - resizeStart
-            local newW = math.max(MIN_W, startSize.X + delta.X)
-            local newH = math.max(MIN_H, startSize.Y + delta.Y)
-            window.Size = UDim2.new(0, newW, 0, newH)
+            -- Scale proportionally based on X movement
+            local scaleDelta = delta.X / window.AbsoluteSize.X
+            local newScale = math.max(MIN_SCALE, startScale + scaleDelta)
+            uiScale.Scale = newScale
         end
     end)
     
@@ -654,7 +658,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 RegisterOpacity(boxIn, "BackgroundTransparency", 1) -- start invisible hover
                 
                 local boxFill = Create("Frame", {
-                    BackgroundColor3 = ThemeColor("Black"),
+                    BackgroundColor3 = Color3.fromRGB(255, 255, 255), -- Must be white for UIGradient to show colors
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 1, 0, 1),
                     Size = UDim2.new(1, -2, 1, -2),
