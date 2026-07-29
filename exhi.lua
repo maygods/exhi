@@ -360,57 +360,46 @@ function ExhibitionLib:CreateWindow(cfg)
         end
     end)
     
-    -- Sidebar
     local sidebar = Create("Frame", {
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 3 * GUI_SCALE, 0, 15 * GUI_SCALE),
-        Size = UDim2.new(0.11, 0, 1, -18 * GUI_SCALE),
+        BackgroundColor3 = ThemeColor("GroupFill"),
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 0, 1 * GUI_SCALE),
+        Size = UDim2.new(0, 37 * GUI_SCALE, 1, -1 * GUI_SCALE),
         Parent = main
     })
     
     local sidebarActiveBG = Create("Frame", {
-        BackgroundColor3 = ThemeColor("SidebarBG"),
+        BackgroundColor3 = ThemeColor("MainFill"),
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 1, 0),
+        Size = UDim2.new(1, 0, 0, 40 * GUI_SCALE),
+        ZIndex = 2,
         Parent = sidebar
     })
-    Create("UIAspectRatioConstraint", {
-        AspectRatio = 1,
-        AspectType = Enum.AspectType.FitWithinMaxSize,
-        DominantAxis = Enum.DominantAxis.Width,
-        Parent = sidebarActiveBG
-    })
+    local activeTop = Create("Frame", { BackgroundColor3 = ThemeColor("Border1"), BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1), ZIndex = 3, Parent = sidebarActiveBG })
+    local activeBot = Create("Frame", { BackgroundColor3 = ThemeColor("Border1"), BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -1), Size = UDim2.new(1, 0, 0, 1), ZIndex = 3, Parent = sidebarActiveBG })
     RegisterOpacity(sidebarActiveBG, "BackgroundTransparency")
-    DrawBorder(sidebarActiveBG, {Colors.Black, Colors.GroupBorderIn})
+    RegisterOpacity(activeTop, "BackgroundTransparency")
+    RegisterOpacity(activeBot, "BackgroundTransparency")
     
     local tabsContainer = Create("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
         Parent = sidebar
     })
-    local tabsListLayout = Create("UIListLayout", {
-        Parent = tabsContainer,
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        FillDirection = Enum.FillDirection.Vertical
-    })
+    -- Removed UIListLayout so we can Tween exact offset
     
     local WindowAPI = {
         Tabs = {},
         ActiveTab = nil
     }
     
-    sidebar:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-        if WindowAPI.ActiveTab then
-            local h = sidebar.AbsoluteSize.X
-            sidebarActiveBG.Position = UDim2.new(0, 0, 0, (WindowAPI.ActiveTab.Index - 1) * h)
-        end
-    end)
+    -- No absolute size property hook needed for fixed width
     
     -- Content Area
     local contentArea = Create("Frame", {
         BackgroundTransparency = 1,
-        Position = UDim2.new(0.11, 8 * GUI_SCALE, 0, 15 * GUI_SCALE),
-        Size = UDim2.new(0.89, -10 * GUI_SCALE, 1, -20 * GUI_SCALE),
+        Position = UDim2.new(0, 42 * GUI_SCALE, 0, 15 * GUI_SCALE),
+        Size = UDim2.new(1, -48 * GUI_SCALE, 1, -20 * GUI_SCALE),
         Parent = main
     })
     
@@ -479,16 +468,11 @@ function ExhibitionLib:CreateWindow(cfg)
         
         local tabBtn = Create("TextButton", {
             BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 1, 0),
+            Position = UDim2.new(0, 0, 0, (tabIndex - 1) * 40 * GUI_SCALE),
+            Size = UDim2.new(1, 0, 0, 40 * GUI_SCALE),
             Text = "",
             LayoutOrder = tabIndex,
             Parent = tabsContainer
-        })
-        Create("UIAspectRatioConstraint", {
-            AspectRatio = 1,
-            AspectType = Enum.AspectType.FitWithinMaxSize,
-            DominantAxis = Enum.DominantAxis.Width,
-            Parent = tabBtn
         })
         
         -- Fallback to text if icon isn't A-Z mapped (like if they use an emoji custom icon)
@@ -507,7 +491,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 BackgroundTransparency = 1,
                 AnchorPoint = Vector2.new(0.5, 0.5),
                 Position = UDim2.new(0.5, 0, 0.5, 0),
-                Size = UDim2.new(0.5, 0, 0.5, 0),
+                Size = UDim2.new(0, 20 * GUI_SCALE, 0, 20 * GUI_SCALE),
                 Image = getcustomasset(iconPath),
                 ImageColor3 = ThemeColor("SidebarInactive"),
                 ScaleType = Enum.ScaleType.Fit,
@@ -523,11 +507,10 @@ function ExhibitionLib:CreateWindow(cfg)
                 Font = Fonts.Regular,
                 Text = tabIcon,
                 TextColor3 = ThemeColor("SidebarInactive"),
-                TextScaled = true,
+                TextSize = 18 * GUI_SCALE,
                 ZIndex = 2,
                 Parent = tabBtn
             })
-            Create("UITextSizeConstraint", { MaxTextSize = 24 * GUI_SCALE, Parent = tabIconLbl })
             RegisterOpacity(tabIconLbl, "TextTransparency")
         end
         
@@ -563,7 +546,7 @@ function ExhibitionLib:CreateWindow(cfg)
             self.ActiveTab.Content.Visible = true
             
             -- Move active indicator
-            local targetY = (tabIndex - 1) * sidebar.AbsoluteSize.X
+            local targetY = (tabIndex - 1) * 40 * GUI_SCALE
             TweenService:Create(sidebarActiveBG, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, targetY)}):Play()
         end
         
@@ -801,13 +784,13 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local wrap = Create("Frame", {
                     BackgroundTransparency = 1,
-                    Size = UDim2.new(1, 0, 0, 16 * GUI_SCALE),
+                    Size = UDim2.new(1, 0, 0, 22 * GUI_SCALE),
                     Parent = secBody
                 })
                 
                 local nameLbl = DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Slider"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
-                local valLbl = DrawTextWithShadow(wrap, tostring(val)..suf, Fonts.Bold, 9 * GUI_SCALE, Colors.TextPrimary, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Right, 2)
-                valLbl.Size = UDim2.new(1, -2 * GUI_SCALE, 0, 9 * GUI_SCALE)
+                local valLbl = DrawTextWithShadow(wrap, tostring(val)..suf, Fonts.Bold, 9 * GUI_SCALE, Colors.TextPrimary, UDim2.new(0, 0, 0, 15 * GUI_SCALE), Enum.TextXAlignment.Center, 2)
+                valLbl.Size = UDim2.new(1, 0, 0, 9 * GUI_SCALE)
                 
                 local trackOut = Create("Frame", {
                     BackgroundColor3 = ThemeColor("GroupBorderOut"),
