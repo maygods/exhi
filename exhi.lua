@@ -292,7 +292,49 @@ function ExhibitionLib:CreateWindow(cfg)
         end
     end)
     
-    -- Resize handle removed to match Exhibition (which uses fixed scaling)
+    local currentScale = 1.0
+    local MIN_SCALE = 0.5
+    local MAX_SCALE = 2.0
+    local resizeHandle = Create("TextButton", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(1, -10 * GUI_SCALE, 1, -10 * GUI_SCALE),
+        Size = UDim2.new(0, 10 * GUI_SCALE, 0, 10 * GUI_SCALE),
+        Text = "",
+        ZIndex = 50,
+        Parent = window
+    })
+    local function CreateGripLine(pos)
+        Create("Frame", { BackgroundColor3 = Colors.TextMuted, BorderSizePixel = 0, Position = pos, Size = UDim2.new(0, 2, 0, 2), ZIndex = 51, Parent = resizeHandle })
+    end
+    CreateGripLine(UDim2.new(0, 6, 0, 8))
+    CreateGripLine(UDim2.new(0, 4, 0, 6))
+    CreateGripLine(UDim2.new(0, 2, 0, 4))
+    CreateGripLine(UDim2.new(0, 8, 0, 6))
+    CreateGripLine(UDim2.new(0, 6, 0, 4))
+    CreateGripLine(UDim2.new(0, 8, 0, 2))
+    
+    local resizing = false
+    local resizeStart, startScale
+    resizeHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            resizing = true
+            resizeStart = input.Position
+            startScale = currentScale
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    resizing = false
+                end
+            end)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - resizeStart
+            local scaleDelta = delta.X / window.AbsoluteSize.X
+            currentScale = math.clamp(startScale + scaleDelta, MIN_SCALE, MAX_SCALE)
+            uiScale.Scale = currentScale
+        end
+    end)
     
     -- Sidebar
     local sidebar = Create("Frame", {
@@ -356,11 +398,11 @@ function ExhibitionLib:CreateWindow(cfg)
         GlobalOpacity.Target = isOpen and 1 or 0
         if isOpen then
             sg.Enabled = true
-            uiScale.Scale = 0.95
-            TweenService:Create(uiScale, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Scale = 1.0}):Play()
+            uiScale.Scale = currentScale * 0.95
+            TweenService:Create(uiScale, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Scale = currentScale}):Play()
             TweenService:Create(bgDarken, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {BackgroundTransparency = 0.4}):Play()
         else
-            TweenService:Create(uiScale, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Scale = 0.95}):Play()
+            TweenService:Create(uiScale, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Scale = currentScale * 0.95}):Play()
             TweenService:Create(bgDarken, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {BackgroundTransparency = 1.0}):Play()
             task.delay(0.2, function()
                 if not isOpen then sg.Enabled = false end
