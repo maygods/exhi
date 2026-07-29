@@ -496,7 +496,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 BackgroundTransparency = 1,
                 AnchorPoint = Vector2.new(0.5, 0.5),
                 Position = UDim2.new(0.5, 0, 0.5, 0),
-                Size = UDim2.new(0, 20 * GUI_SCALE, 0, 20 * GUI_SCALE),
+                Size = UDim2.new(0, 24 * GUI_SCALE, 0, 24 * GUI_SCALE),
                 Image = getcustomasset(iconPath),
                 ImageColor3 = ThemeColor("SidebarInactive"),
                 ScaleType = Enum.ScaleType.Fit,
@@ -512,7 +512,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 Font = Fonts.Regular,
                 Text = tabIcon,
                 TextColor3 = ThemeColor("SidebarInactive"),
-                TextSize = 18 * GUI_SCALE,
+                TextSize = 24 * GUI_SCALE,
                 ZIndex = 2,
                 Parent = tabBtn
             })
