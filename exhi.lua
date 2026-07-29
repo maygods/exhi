@@ -196,10 +196,20 @@ function ExhibitionLib:CreateWindow(cfg)
     pcall(function() if syn then syn.protect_gui(sg) end end)
     sg.Parent = CoreGui:FindFirstChild("RobloxGui") or Players.LocalPlayer:WaitForChild("PlayerGui")
     
+    -- Darken Background
+    local bgDarken = Create("Frame", {
+        BackgroundColor3 = Colors.Black,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 1, 0),
+        ZIndex = 0,
+        Parent = sg
+    })
+    
     -- Main Window Wrap
     local window = Create("Frame", {
         Name = "Window",
-        BackgroundColor3 = ThemeColor("Border1"),
+        BackgroundColor3 = ThemeColor("Border1"), -- 10
         BorderSizePixel = 0,
         Position = UDim2.new(0.5, -SCALED_SIZE.X/2, 0.5, -SCALED_SIZE.Y/2),
         Size = UDim2.new(0, SCALED_SIZE.X, 0, SCALED_SIZE.Y),
@@ -212,10 +222,10 @@ function ExhibitionLib:CreateWindow(cfg)
         Parent = window
     })
     
-    -- Nested Borders
-    local b2 = DrawBorder(window, {Colors.Black, Colors.Border2})
-    local b3 = DrawBorder(b2, {Colors.Black, Colors.Border2})
-    local innerBorder = DrawBorder(b3, {Colors.Black, Colors.Border3})
+    -- Nested Borders (10 -> 60 -> 40 -> 60 -> 22)
+    local b2 = DrawBorder(window, {Colors.Border2}) -- 60
+    local b3 = DrawBorder(b2, {Colors.Border3}) -- 40
+    local innerBorder = DrawBorder(b3, {Colors.Border2}) -- 60
     
     -- Main Fill
     local main = Create("Frame", {
@@ -282,46 +292,7 @@ function ExhibitionLib:CreateWindow(cfg)
         end
     end)
     
-    local MIN_SCALE = 0.5
-    local resizeHandle = Create("TextButton", {
-        BackgroundTransparency = 1,
-        Position = UDim2.new(1, -10, 1, -10),
-        Size = UDim2.new(0, 10, 0, 10),
-        Text = "",
-        ZIndex = 50,
-        Parent = window
-    })
-    -- Diagonal grip lines
-    Create("Frame", { BackgroundColor3 = Colors.TextMuted, BorderSizePixel = 0, Position = UDim2.new(0, 6, 0, 8), Size = UDim2.new(0, 2, 0, 2), ZIndex = 51, Parent = resizeHandle })
-    Create("Frame", { BackgroundColor3 = Colors.TextMuted, BorderSizePixel = 0, Position = UDim2.new(0, 4, 0, 6), Size = UDim2.new(0, 2, 0, 2), ZIndex = 51, Parent = resizeHandle })
-    Create("Frame", { BackgroundColor3 = Colors.TextMuted, BorderSizePixel = 0, Position = UDim2.new(0, 2, 0, 4), Size = UDim2.new(0, 2, 0, 2), ZIndex = 51, Parent = resizeHandle })
-    Create("Frame", { BackgroundColor3 = Colors.TextMuted, BorderSizePixel = 0, Position = UDim2.new(0, 8, 0, 6), Size = UDim2.new(0, 2, 0, 2), ZIndex = 51, Parent = resizeHandle })
-    Create("Frame", { BackgroundColor3 = Colors.TextMuted, BorderSizePixel = 0, Position = UDim2.new(0, 6, 0, 4), Size = UDim2.new(0, 2, 0, 2), ZIndex = 51, Parent = resizeHandle })
-    Create("Frame", { BackgroundColor3 = Colors.TextMuted, BorderSizePixel = 0, Position = UDim2.new(0, 8, 0, 2), Size = UDim2.new(0, 2, 0, 2), ZIndex = 51, Parent = resizeHandle })
-    
-    local resizing = false
-    local resizeStart, startScale
-    resizeHandle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            resizing = true
-            resizeStart = input.Position
-            startScale = uiScale.Scale
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    resizing = false
-                end
-            end)
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - resizeStart
-            -- Scale proportionally based on X movement
-            local scaleDelta = delta.X / window.AbsoluteSize.X
-            local newScale = math.max(MIN_SCALE, startScale + scaleDelta)
-            uiScale.Scale = newScale
-        end
-    end)
+    -- Resize handle removed to match Exhibition (which uses fixed scaling)
     
     -- Sidebar
     local sidebar = Create("Frame", {
@@ -385,7 +356,12 @@ function ExhibitionLib:CreateWindow(cfg)
         GlobalOpacity.Target = isOpen and 1 or 0
         if isOpen then
             sg.Enabled = true
+            uiScale.Scale = 0.95
+            TweenService:Create(uiScale, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Scale = 1.0}):Play()
+            TweenService:Create(bgDarken, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {BackgroundTransparency = 0.4}):Play()
         else
+            TweenService:Create(uiScale, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Scale = 0.95}):Play()
+            TweenService:Create(bgDarken, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {BackgroundTransparency = 1.0}):Play()
             task.delay(0.2, function()
                 if not isOpen then sg.Enabled = false end
             end)
