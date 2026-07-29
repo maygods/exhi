@@ -52,7 +52,12 @@ local SCALED_SIZE = REAL_SIZE * GUI_SCALE
 local function Create(cls, props)
     local inst = Instance.new(cls)
     for k, v in pairs(props or {}) do
-        inst[k] = v
+        if type(v) == "table" and v.__isThemeColor then
+            inst[k] = Colors[v.Key]
+            table.insert(ExhibitionLib.ThemeInstances, { Inst = inst, Prop = k, Key = v.Key })
+        else
+            inst[k] = v
+        end
     end
     return inst
 end
@@ -70,8 +75,26 @@ local ExhibitionLib = {
     Icons = {
         Combat = "⚔", Player = "👤", Movement = "🏃", Visuals = "👁",
         Other = "⚙", Colors = "🎨", Minigames = "🎮", Settings = "⚙"
-    }
+    },
+    ThemeInstances = {}
 }
+
+local function ThemeColor(key)
+    return {__isThemeColor = true, Key = key}
+end
+
+function ExhibitionLib:UpdateColor(key, col)
+    Colors[key] = col
+    for _, obj in ipairs(self.ThemeInstances) do
+        if obj.Key == key then
+            obj.Inst[obj.Prop] = col
+        elseif obj.Key1 == key or obj.Key2 == key then
+            if obj.Type == 'Gradient' then
+                obj.Inst.Color = ColorSequence.new(Colors[obj.Key1], Colors[obj.Key2])
+            end
+        end
+    end
+end
 
 -- Render loop for global animations
 RunService.RenderStepped:Connect(function(dt)
@@ -116,12 +139,14 @@ local function DrawBorder(parent, colors)
     return current
 end
 
-local function CreateUIGradient(parent, top, bot)
-    return Create("UIGradient", {
-        Color = ColorSequence.new(top, bot),
+local function CreateUIGradient(parent, topKey, botKey)
+    local grad = Create("UIGradient", {
         Rotation = 90,
         Parent = parent
     })
+    grad.Color = ColorSequence.new(Colors[topKey], Colors[botKey])
+    table.insert(ExhibitionLib.ThemeInstances, { Type = "Gradient", Inst = grad, Key1 = topKey, Key2 = botKey })
+    return grad
 end
 
 local function DrawTextWithShadow(parent, text, font, size, color, pos, align, zindex)
@@ -135,31 +160,10 @@ local function DrawTextWithShadow(parent, text, font, size, color, pos, align, z
         TextSize = size,
         TextXAlignment = align,
         ZIndex = zindex or 2,
+        TextStrokeColor3 = Colors.Black,
+        TextStrokeTransparency = 0,
         Parent = parent
     })
-    
-    local offsets = { UDim2.new(0,-1,0,0), UDim2.new(0,1,0,0), UDim2.new(0,0,0,-1), UDim2.new(0,0,0,1) }
-    local shadows = {}
-    for _, off in ipairs(offsets) do
-        local sl = Create("TextLabel", {
-            BackgroundTransparency = 1,
-            Position = off,
-            Size = UDim2.new(1,0,1,0),
-            Font = font,
-            Text = text,
-            TextColor3 = Colors.Black,
-            TextSize = size,
-            TextXAlignment = align,
-            ZIndex = (zindex or 2) - 1,
-            Parent = lbl
-        })
-        table.insert(shadows, sl)
-    end
-    
-    lbl:GetPropertyChangedSignal("Text"):Connect(function()
-        for _, sl in ipairs(shadows) do sl.Text = lbl.Text end
-    end)
-    
     return lbl
 end
 
@@ -178,7 +182,7 @@ function ExhibitionLib:CreateWindow(cfg)
     -- Main Window Wrap
     local window = Create("Frame", {
         Name = "Window",
-        BackgroundColor3 = Colors.Border1,
+        BackgroundColor3 = ThemeColor("Border1"),
         BorderSizePixel = 0,
         Position = UDim2.new(0.5, -SCALED_SIZE.X/2, 0.5, -SCALED_SIZE.Y/2),
         Size = UDim2.new(0, SCALED_SIZE.X, 0, SCALED_SIZE.Y),
@@ -193,7 +197,7 @@ function ExhibitionLib:CreateWindow(cfg)
     
     -- Main Fill
     local main = Create("Frame", {
-        BackgroundColor3 = Colors.MainFill,
+        BackgroundColor3 = ThemeColor("MainFill"),
         BorderSizePixel = 0,
         Position = UDim2.new(0,1,0,1),
         Size = UDim2.new(1,-2,1,-2),
@@ -218,7 +222,7 @@ function ExhibitionLib:CreateWindow(cfg)
         Parent = rainbowBar
     })
     local rainbowOverlay = Create("Frame", {
-        BackgroundColor3 = Colors.Black,
+        BackgroundColor3 = ThemeColor("Black"),
         BorderSizePixel = 0,
         Size = UDim2.new(1,0,1,0),
         Parent = rainbowBar
@@ -265,7 +269,7 @@ function ExhibitionLib:CreateWindow(cfg)
     })
     
     local sidebarActiveBG = Create("Frame", {
-        BackgroundColor3 = Colors.SidebarBG,
+        BackgroundColor3 = ThemeColor("SidebarBG"),
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 40 * GUI_SCALE), -- Height of one tab
         Parent = sidebar
@@ -274,7 +278,7 @@ function ExhibitionLib:CreateWindow(cfg)
     DrawBorder(sidebarActiveBG, {Colors.Black, Colors.GroupBorderIn})
     
     local sidebarActiveIndicator = Create("Frame", {
-        BackgroundColor3 = Colors.Accent,
+        BackgroundColor3 = ThemeColor("Accent"),
         BorderSizePixel = 0,
         Position = UDim2.new(0, 3 * GUI_SCALE, 0.5, -6 * GUI_SCALE),
         Size = UDim2.new(0, 3 * GUI_SCALE, 0, 12 * GUI_SCALE),
@@ -301,7 +305,7 @@ function ExhibitionLib:CreateWindow(cfg)
         BackgroundTransparency = 1,
         Font = Fonts.Regular,
         Text = "",
-        TextColor3 = Colors.TextPrimary,
+        TextColor3 = ThemeColor("TextPrimary"),
         TextSize = 10 * GUI_SCALE,
         TextXAlignment = Enum.TextXAlignment.Left,
         Position = UDim2.new(0, 55 * GUI_SCALE, 0, 9 * GUI_SCALE),
@@ -357,7 +361,7 @@ function ExhibitionLib:CreateWindow(cfg)
             Size = UDim2.new(1, 0, 0, 40 * GUI_SCALE),
             Font = Fonts.Regular,
             Text = tabIcon,
-            TextColor3 = Colors.SidebarInactive,
+            TextColor3 = ThemeColor("SidebarInactive"),
             TextSize = 18 * GUI_SCALE,
             Parent = tabsContainer
         })
@@ -390,13 +394,13 @@ function ExhibitionLib:CreateWindow(cfg)
         tabBtn.MouseButton1Click:Connect(SelectTab)
         tabBtn.MouseEnter:Connect(function()
             if self.ActiveTab ~= tabObj then
-                TweenService:Create(tabBtn, TweenInfo.new(0.1), {TextColor3 = Colors.SidebarHover}):Play()
+                TweenService:Create(tabBtn, TweenInfo.new(0.1), {TextColor3 = ThemeColor("SidebarHover")}):Play()
                 if tabName then ShowTooltip(tabName) end
             end
         end)
         tabBtn.MouseLeave:Connect(function()
             if self.ActiveTab ~= tabObj then
-                TweenService:Create(tabBtn, TweenInfo.new(0.1), {TextColor3 = Colors.SidebarInactive}):Play()
+                TweenService:Create(tabBtn, TweenInfo.new(0.1), {TextColor3 = ThemeColor("SidebarInactive")}):Play()
             end
             HideTooltip()
         end)
@@ -426,7 +430,7 @@ function ExhibitionLib:CreateWindow(cfg)
             end
             
             local secOut = Create("Frame", {
-                BackgroundColor3 = Colors.GroupBorderOut,
+                BackgroundColor3 = ThemeColor("GroupBorderOut"),
                 BorderSizePixel = 0,
                 Position = UDim2.new(0, self.ColXs[col], 0, self.ColYs[col]),
                 Size = UDim2.new(0, 95 * GUI_SCALE, 0, 20), -- Height updated dynamically
@@ -449,7 +453,7 @@ function ExhibitionLib:CreateWindow(cfg)
             RegisterOpacity(secOut, "BackgroundTransparency")
             
             local secIn = Create("Frame", {
-                BackgroundColor3 = Colors.GroupBorderIn,
+                BackgroundColor3 = ThemeColor("GroupBorderIn"),
                 BorderSizePixel = 0,
                 Position = UDim2.new(0, 1, 0, 1),
                 Size = UDim2.new(1, -2, 1, -2),
@@ -458,7 +462,7 @@ function ExhibitionLib:CreateWindow(cfg)
             RegisterOpacity(secIn, "BackgroundTransparency")
             
             local secFill = Create("Frame", {
-                BackgroundColor3 = Colors.GroupFill,
+                BackgroundColor3 = ThemeColor("GroupFill"),
                 BorderSizePixel = 0,
                 Position = UDim2.new(0, 1, 0, 1),
                 Size = UDim2.new(1, -2, 1, -2),
@@ -468,7 +472,7 @@ function ExhibitionLib:CreateWindow(cfg)
             
             -- Title Break Effect
             local titleBg = Create("Frame", {
-                BackgroundColor3 = Colors.GroupFill,
+                BackgroundColor3 = ThemeColor("GroupFill"),
                 BorderSizePixel = 0,
                 Position = UDim2.new(0, 4 * GUI_SCALE, 0, -2 * GUI_SCALE),
                 Size = UDim2.new(0, 50, 0, 4 * GUI_SCALE),
@@ -520,7 +524,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 })
                 
                 local boxOut = Create("Frame", {
-                    BackgroundColor3 = Colors.GroupBorderOut,
+                    BackgroundColor3 = ThemeColor("GroupBorderOut"),
                     BorderSizePixel = 0,
                     Size = UDim2.new(0, 6 * GUI_SCALE, 0, 6 * GUI_SCALE),
                     Position = UDim2.new(0, 0, 0.5, -3 * GUI_SCALE),
@@ -529,7 +533,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 RegisterOpacity(boxOut, "BackgroundTransparency")
                 
                 local boxIn = Create("Frame", {
-                    BackgroundColor3 = Colors.Hover,
+                    BackgroundColor3 = ThemeColor("Hover"),
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 1, 0, 1),
                     Size = UDim2.new(1, -2, 1, -2),
@@ -538,7 +542,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 RegisterOpacity(boxIn, "BackgroundTransparency", 1) -- start invisible hover
                 
                 local boxFill = Create("Frame", {
-                    BackgroundColor3 = Colors.Black,
+                    BackgroundColor3 = ThemeColor("Black"),
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 1, 0, 1),
                     Size = UDim2.new(1, -2, 1, -2),
@@ -603,7 +607,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 valLbl.Size = UDim2.new(1, -2 * GUI_SCALE, 0, 9 * GUI_SCALE)
                 
                 local trackOut = Create("Frame", {
-                    BackgroundColor3 = Colors.GroupBorderOut,
+                    BackgroundColor3 = ThemeColor("GroupBorderOut"),
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 0, 0, 10 * GUI_SCALE),
                     Size = UDim2.new(1, 0, 0, 4.5 * GUI_SCALE), -- 2.5 * scale
@@ -612,24 +616,24 @@ function ExhibitionLib:CreateWindow(cfg)
                 RegisterOpacity(trackOut, "BackgroundTransparency")
                 
                 local trackIn = Create("Frame", {
-                    BackgroundColor3 = Colors.Black,
+                    BackgroundColor3 = ThemeColor("Black"),
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 1, 0, 1),
                     Size = UDim2.new(1, -2, 1, -2),
                     Parent = trackOut
                 })
                 RegisterOpacity(trackIn, "BackgroundTransparency")
-                CreateUIGradient(trackIn, Colors.SlidGradTop, Colors.SlidGradBot)
+                CreateUIGradient(trackIn, "SlidGradTop", "SlidGradBot")
                 
                 local fill = Create("Frame", {
-                    BackgroundColor3 = Colors.White,
+                    BackgroundColor3 = ThemeColor("White"),
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 0, 0, 0),
                     Size = UDim2.new(0, 0, 1, 0),
                     Parent = trackIn
                 })
                 RegisterOpacity(fill, "BackgroundTransparency")
-                CreateUIGradient(fill, Colors.Accent, Colors.Accent)
+                CreateUIGradient(fill, "Accent", "Accent")
                 
                 local function pct(v) return (v - min) / (max - min) end
                 
@@ -666,7 +670,7 @@ function ExhibitionLib:CreateWindow(cfg)
                     BackgroundTransparency = 1,
                     Position = UDim2.new(0, -3 * GUI_SCALE, 0, 11 * GUI_SCALE),
                     Size = UDim2.new(0, 1.5 * GUI_SCALE, 0, 0.5 * GUI_SCALE),
-                    BackgroundColor3 = Colors.TextDim,
+                    BackgroundColor3 = ThemeColor("TextDim"),
                     Text = "",
                     Parent = wrap
                 })
@@ -676,7 +680,7 @@ function ExhibitionLib:CreateWindow(cfg)
                     BackgroundTransparency = 1,
                     Position = UDim2.new(1, 0.5 * GUI_SCALE, 0, 10.5 * GUI_SCALE),
                     Size = UDim2.new(0, 1 * GUI_SCALE, 0, 1.5 * GUI_SCALE),
-                    BackgroundColor3 = Colors.TextDim,
+                    BackgroundColor3 = ThemeColor("TextDim"),
                     Text = "",
                     Parent = wrap
                 })
@@ -685,7 +689,7 @@ function ExhibitionLib:CreateWindow(cfg)
                     BorderSizePixel = 0,
                     Position = UDim2.new(0.5, -0.75 * GUI_SCALE, 0.5, -0.25 * GUI_SCALE),
                     Size = UDim2.new(0, 1.5 * GUI_SCALE, 0, 0.5 * GUI_SCALE),
-                    BackgroundColor3 = Colors.TextDim,
+                    BackgroundColor3 = ThemeColor("TextDim"),
                     Parent = plusBtn
                 })
                 RegisterOpacity(plusBtnH, "BackgroundTransparency", 0.5)
@@ -737,7 +741,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Dropdown"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
                 
                 local boxOut = Create("Frame", {
-                    BackgroundColor3 = Colors.GroupBorderOut,
+                    BackgroundColor3 = ThemeColor("GroupBorderOut"),
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 0, 0, 10 * GUI_SCALE),
                     Size = UDim2.new(1, 0, 0, 11 * GUI_SCALE),
@@ -746,7 +750,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 RegisterOpacity(boxOut, "BackgroundTransparency")
                 
                 local boxIn = Create("TextButton", {
-                    BackgroundColor3 = Colors.Black,
+                    BackgroundColor3 = ThemeColor("Black"),
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 1, 0, 1),
                     Size = UDim2.new(1, -2, 1, -2),
@@ -754,7 +758,7 @@ function ExhibitionLib:CreateWindow(cfg)
                     Parent = boxOut
                 })
                 RegisterOpacity(boxIn, "BackgroundTransparency")
-                CreateUIGradient(boxIn, Colors.DropGradTop, Colors.DropGradBot)
+                CreateUIGradient(boxIn, "DropGradTop", "DropGradBot")
                 
                 local selText = DrawTextWithShadow(boxIn, selected, Fonts.Regular, 9 * GUI_SCALE, Colors.TextMuted, UDim2.new(0, 2 * GUI_SCALE, 0, 0), Enum.TextXAlignment.Left, 2)
                 selText.Size = UDim2.new(1, -10 * GUI_SCALE, 1, 0)
@@ -767,12 +771,12 @@ function ExhibitionLib:CreateWindow(cfg)
                     Size = UDim2.new(0, 4 * GUI_SCALE, 0, 2 * GUI_SCALE),
                     Parent = boxIn
                 })
-                local a1 = Create("Frame", {BackgroundColor3 = Colors.TextMuted, BorderSizePixel=0, Position=UDim2.new(0,0,0,0), Size=UDim2.new(1,0,0,1*GUI_SCALE), Parent=arrow})
-                local a2 = Create("Frame", {BackgroundColor3 = Colors.TextMuted, BorderSizePixel=0, Position=UDim2.new(0,1*GUI_SCALE,0,1*GUI_SCALE), Size=UDim2.new(1,-2*GUI_SCALE,0,1*GUI_SCALE), Parent=arrow})
-                local a3 = Create("Frame", {BackgroundColor3 = Colors.TextMuted, BorderSizePixel=0, Position=UDim2.new(0,2*GUI_SCALE,0,2*GUI_SCALE), Size=UDim2.new(1,-4*GUI_SCALE,0,1*GUI_SCALE), Parent=arrow})
+                local a1 = Create("Frame", {BackgroundColor3 = ThemeColor("TextMuted"), BorderSizePixel=0, Position=UDim2.new(0,0,0,0), Size=UDim2.new(1,0,0,1*GUI_SCALE), Parent=arrow})
+                local a2 = Create("Frame", {BackgroundColor3 = ThemeColor("TextMuted"), BorderSizePixel=0, Position=UDim2.new(0,1*GUI_SCALE,0,1*GUI_SCALE), Size=UDim2.new(1,-2*GUI_SCALE,0,1*GUI_SCALE), Parent=arrow})
+                local a3 = Create("Frame", {BackgroundColor3 = ThemeColor("TextMuted"), BorderSizePixel=0, Position=UDim2.new(0,2*GUI_SCALE,0,2*GUI_SCALE), Size=UDim2.new(1,-4*GUI_SCALE,0,1*GUI_SCALE), Parent=arrow})
                 
                 local dropList = Create("Frame", {
-                    BackgroundColor3 = Colors.GroupBorderOut,
+                    BackgroundColor3 = ThemeColor("GroupBorderOut"),
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 0, 1, 0),
                     Size = UDim2.new(1, 0, 0, #options * 11 * GUI_SCALE),
@@ -783,7 +787,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 RegisterOpacity(dropList, "BackgroundTransparency")
                 
                 local dropListIn = Create("Frame", {
-                    BackgroundColor3 = Colors.Black,
+                    BackgroundColor3 = ThemeColor("Black"),
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 1, 0, 1),
                     Size = UDim2.new(1, -2, 1, -2),
@@ -791,7 +795,7 @@ function ExhibitionLib:CreateWindow(cfg)
                     Parent = dropList
                 })
                 RegisterOpacity(dropListIn, "BackgroundTransparency")
-                CreateUIGradient(dropListIn, Colors.DropGradTop, Colors.DropGradBot)
+                CreateUIGradient(dropListIn, "DropGradTop", "DropGradBot")
                 
                 local function UpdateOptions()
                     for _, v in ipairs(dropListIn:GetChildren()) do
@@ -814,7 +818,7 @@ function ExhibitionLib:CreateWindow(cfg)
                         -- Indent slightly
                         local pad = Create("UIPadding", {PaddingLeft = UDim.new(0, 3 * GUI_SCALE), Parent=obtn})
                         
-                        obtn.MouseEnter:Connect(function() TweenService:Create(obtn, TweenInfo.new(0.1), {TextColor3 = Colors.Hover}):Play() end)
+                        obtn.MouseEnter:Connect(function() TweenService:Create(obtn, TweenInfo.new(0.1), {TextColor3 = ThemeColor("Hover")}):Play() end)
                         obtn.MouseLeave:Connect(function() TweenService:Create(obtn, TweenInfo.new(0.1), {TextColor3 = opt == selected and Colors.Accent or Colors.TextPrimary}):Play() end)
                         obtn.MouseButton1Click:Connect(function()
                             selected = opt
@@ -859,8 +863,147 @@ function ExhibitionLib:CreateWindow(cfg)
             function SectionAPI:CreateTextbox(ecfg) return {} end
             function SectionAPI:CreateKeybind(ecfg) return {} end
             function SectionAPI:CreateButton(ecfg) return {} end
-            function SectionAPI:CreateColorPicker(ecfg) return {} end
-            
+            function SectionAPI:CreateColorPicker(ecfg)
+                ecfg = ecfg or {}
+                local color = ecfg.Default or Color3.new(1,0,0)
+                local cb = ecfg.Callback or function() end
+                
+                local wrap = Create("Frame", {
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(1, 0, 0, 16 * GUI_SCALE),
+                    Parent = secBody
+                })
+                
+                local nameLbl = DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Color"), Fonts.Regular, 9 * GUI_SCALE, ThemeColor("TextDim"), UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
+                
+                local btnOut = Create("TextButton", {
+                    BackgroundColor3 = ThemeColor("GroupBorderOut"),
+                    BorderSizePixel = 0,
+                    Position = UDim2.new(1, -20 * GUI_SCALE, 0.5, -4 * GUI_SCALE),
+                    Size = UDim2.new(0, 15 * GUI_SCALE, 0, 8 * GUI_SCALE),
+                    Text = "",
+                    Parent = wrap
+                })
+                local btnIn = Create("Frame", {
+                    BackgroundColor3 = color,
+                    BorderSizePixel = 0,
+                    Position = UDim2.new(0, 1, 0, 1),
+                    Size = UDim2.new(1, -2, 1, -2),
+                    Parent = btnOut
+                })
+                
+                local popup = Create("Frame", {
+                    BackgroundColor3 = ThemeColor("GroupBorderOut"),
+                    BorderSizePixel = 0,
+                    Position = UDim2.new(1, 5 * GUI_SCALE, 0, 0),
+                    Size = UDim2.new(0, 80 * GUI_SCALE, 0, 80 * GUI_SCALE),
+                    Visible = false,
+                    ZIndex = 100,
+                    Parent = btnOut
+                })
+                local popIn = Create("Frame", {
+                    BackgroundColor3 = ThemeColor("GroupFill"),
+                    BorderSizePixel = 0,
+                    Position = UDim2.new(0, 1, 0, 1),
+                    Size = UDim2.new(1, -2, 1, -2),
+                    ZIndex = 100,
+                    Parent = popup
+                })
+                
+                local svArea = Create("TextButton", {
+                    BackgroundColor3 = Color3.new(1,0,0),
+                    BorderSizePixel = 0,
+                    Position = UDim2.new(0, 4 * GUI_SCALE, 0, 4 * GUI_SCALE),
+                    Size = UDim2.new(0, 60 * GUI_SCALE, 0, 60 * GUI_SCALE),
+                    Text = "",
+                    AutoButtonColor = false,
+                    ZIndex = 101,
+                    Parent = popIn
+                })
+                
+                local svWhite = Create("Frame", { BackgroundColor3 = Color3.new(1,1,1), BorderSizePixel = 0, Size = UDim2.new(1,0,1,0), ZIndex=102, Parent = svArea })
+                Create("UIGradient", { Color = ColorSequence.new(Color3.new(1,1,1), Color3.new(1,1,1)), Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0), NumberSequenceKeypoint.new(1,1)}), Rotation = 0, Parent = svWhite })
+                
+                local svBlack = Create("Frame", { BackgroundColor3 = Color3.new(0,0,0), BorderSizePixel = 0, Size = UDim2.new(1,0,1,0), ZIndex=103, Parent = svArea })
+                Create("UIGradient", { Color = ColorSequence.new(Color3.new(0,0,0), Color3.new(0,0,0)), Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,1), NumberSequenceKeypoint.new(1,0)}), Rotation = 90, Parent = svBlack })
+                
+                local svCursor = Create("Frame", { BackgroundColor3 = Color3.new(1,1,1), Size = UDim2.new(0, 2, 0, 2), Position = UDim2.new(1,-1,0,-1), ZIndex=104, Parent = svArea })
+                
+                local hueArea = Create("TextButton", {
+                    BackgroundColor3 = Color3.new(1,1,1),
+                    BorderSizePixel = 0,
+                    Position = UDim2.new(0, 68 * GUI_SCALE, 0, 4 * GUI_SCALE),
+                    Size = UDim2.new(0, 8 * GUI_SCALE, 0, 60 * GUI_SCALE),
+                    Text = "",
+                    AutoButtonColor = false,
+                    ZIndex = 101,
+                    Parent = popIn
+                })
+                local hueGrad = Create("UIGradient", {
+                    Color = ColorSequence.new({
+                        ColorSequenceKeypoint.new(0, Color3.new(1,0,0)),
+                        ColorSequenceKeypoint.new(0.167, Color3.new(1,1,0)),
+                        ColorSequenceKeypoint.new(0.333, Color3.new(0,1,0)),
+                        ColorSequenceKeypoint.new(0.5, Color3.new(0,1,1)),
+                        ColorSequenceKeypoint.new(0.667, Color3.new(0,0,1)),
+                        ColorSequenceKeypoint.new(0.833, Color3.new(1,0,1)),
+                        ColorSequenceKeypoint.new(1, Color3.new(1,0,0))
+                    }),
+                    Rotation = 90,
+                    Parent = hueArea
+                })
+                local hueCursor = Create("Frame", { BackgroundColor3 = Color3.new(1,1,1), Size = UDim2.new(1, 0, 0, 2), Position = UDim2.new(0,0,0,-1), ZIndex=104, Parent = hueArea })
+                
+                local h, s, v = Color3.toHSV(color)
+                
+                local function UpdateColor()
+                    color = Color3.fromHSV(h, s, v)
+                    btnIn.BackgroundColor3 = color
+                    svArea.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+                    
+                    svCursor.Position = UDim2.new(s, -1, 1-v, -1)
+                    hueCursor.Position = UDim2.new(0, 0, h, -1)
+                    
+                    cb(color)
+                end
+                UpdateColor()
+                
+                local draggingSV = false
+                local draggingHue = false
+                
+                svArea.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then draggingSV = true end end)
+                hueArea.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then draggingHue = true end end)
+                
+                UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then draggingSV = false; draggingHue = false end end)
+                
+                UserInputService.InputChanged:Connect(function(i)
+                    if i.UserInputType == Enum.UserInputType.MouseMovement then
+                        if draggingSV then
+                            local x = math.clamp((i.Position.X - svArea.AbsolutePosition.X) / svArea.AbsoluteSize.X, 0, 1)
+                            local y = math.clamp((i.Position.Y - svArea.AbsolutePosition.Y) / svArea.AbsoluteSize.Y, 0, 1)
+                            s = x
+                            v = 1 - y
+                            UpdateColor()
+                        elseif draggingHue then
+                            local y = math.clamp((i.Position.Y - hueArea.AbsolutePosition.Y) / hueArea.AbsoluteSize.Y, 0, 1)
+                            h = y
+                            UpdateColor()
+                        end
+                    end
+                end)
+                
+                local open = false
+                btnOut.MouseButton1Click:Connect(function()
+                    open = not open
+                    popup.Visible = open
+                    secOut.ZIndex = open and 50 or 1
+                end)
+                
+                return {
+                    Set = function(col) color = col; h,s,v = Color3.toHSV(col); UpdateColor() end,
+                    Get = function() return color end
+                }
+            end
             return SectionAPI
         end
         
