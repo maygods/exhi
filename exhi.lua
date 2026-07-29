@@ -314,12 +314,12 @@ function ExhibitionLib:CreateWindow(cfg)
     CreateGripLine(UDim2.new(0, 8, 0, 2))
     
     local resizing = false
-    local resizeStart, startScale
+    local resizeStart, startSize
     resizeHandle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             resizing = true
             resizeStart = input.Position
-            startScale = currentScale
+            startSize = window.AbsoluteSize
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     resizing = false
@@ -330,9 +330,16 @@ function ExhibitionLib:CreateWindow(cfg)
     UserInputService.InputChanged:Connect(function(input)
         if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
             local delta = input.Position - resizeStart
-            local scaleDelta = delta.X / window.AbsoluteSize.X
-            currentScale = math.clamp(startScale + scaleDelta, MIN_SCALE, MAX_SCALE)
-            uiScale.Scale = currentScale
+            local scale = uiScale.Scale
+            
+            -- Enforce minimum bounds
+            local minX = 340 * GUI_SCALE
+            local minY = 200 * GUI_SCALE
+            
+            local newX = math.max(minX, (startSize.X + delta.X) / scale)
+            local newY = math.max(minY, (startSize.Y + delta.Y) / scale)
+            
+            window.Size = UDim2.new(0, newX, 0, newY)
         end
     end)
     
