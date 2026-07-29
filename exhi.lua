@@ -383,6 +383,13 @@ function ExhibitionLib:CreateWindow(cfg)
     local function ToggleUI()
         isOpen = not isOpen
         GlobalOpacity.Target = isOpen and 1 or 0
+        if isOpen then
+            sg.Enabled = true
+        else
+            task.delay(0.2, function()
+                if not isOpen then sg.Enabled = false end
+            end)
+        end
     end
     
     -- Start closed, then open
@@ -657,26 +664,35 @@ function ExhibitionLib:CreateWindow(cfg)
                 })
                 RegisterOpacity(boxIn, "BackgroundTransparency", 1) -- start invisible hover
                 
-                local boxFill = Create("Frame", {
-                    BackgroundColor3 = Color3.fromRGB(255, 255, 255), -- Must be white for UIGradient to show colors
+                local boxFillOff = Create("Frame", {
+                    BackgroundColor3 = Color3.fromRGB(255, 255, 255),
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 1, 0, 1),
                     Size = UDim2.new(1, -2, 1, -2),
+                    Visible = not state,
                     Parent = boxOut
                 })
-                RegisterOpacity(boxFill, "BackgroundTransparency")
+                RegisterOpacity(boxFillOff, "BackgroundTransparency")
+                CreateUIGradient(boxFillOff, "ElemGradTop", "ElemGradBot")
                 
-                local fillGrad = CreateUIGradient(boxFill, state and Colors.Accent or Colors.ElemGradTop, state and Colors.Accent or Colors.ElemGradBot)
+                local boxFillOn = Create("Frame", {
+                    BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                    BorderSizePixel = 0,
+                    Position = UDim2.new(0, 1, 0, 1),
+                    Size = UDim2.new(1, -2, 1, -2),
+                    Visible = state,
+                    Parent = boxOut
+                })
+                RegisterOpacity(boxFillOn, "BackgroundTransparency")
+                CreateUIGradient(boxFillOn, "Accent", "Accent")
                 
                 local nameLbl = DrawTextWithShadow(btn, Capitalize(ecfg.Name or "Toggle"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 10 * GUI_SCALE, 0, 0), Enum.TextXAlignment.Left, 2)
                 nameLbl.Size = UDim2.new(1, 0, 1, 0)
                 
                 local function SetState(s)
                     state = s
-                    fillGrad.Color = ColorSequence.new({
-                        ColorSequenceKeypoint.new(0, state and Colors.Accent or Colors.ElemGradTop),
-                        ColorSequenceKeypoint.new(1, state and Colors.Accent or Colors.ElemGradBot)
-                    })
+                    boxFillOff.Visible = not state
+                    boxFillOn.Visible = state
                     cb(state)
                 end
                 
