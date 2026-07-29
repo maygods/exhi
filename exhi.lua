@@ -48,27 +48,6 @@ local GUI_SCALE = 1.7 -- 340 * 1.7 = 578 (close to 580)
 local REAL_SIZE = Vector2.new(340, 340)
 local SCALED_SIZE = REAL_SIZE * GUI_SCALE
 
--- Utilities
-local function Create(cls, props)
-    local inst = Instance.new(cls)
-    for k, v in pairs(props or {}) do
-        if type(v) == "table" and v.__isThemeColor then
-            inst[k] = Colors[v.Key]
-            table.insert(ExhibitionLib.ThemeInstances, { Inst = inst, Prop = k, Key = v.Key })
-        else
-            inst[k] = v
-        end
-    end
-    return inst
-end
-
-local function Lerp(a, b, t)
-    return a + (b - a) * t
-end
-
--- Global Opacity (0 to 1)
-local GlobalOpacity = { Value = 0, Target = 0, Speed = 25 }
-
 local ExhibitionLib = {
     Instances = {},
     Windows = {},
@@ -95,6 +74,27 @@ function ExhibitionLib:UpdateColor(key, col)
         end
     end
 end
+
+-- Utilities
+local function Create(cls, props)
+    local inst = Instance.new(cls)
+    for k, v in pairs(props or {}) do
+        if type(v) == "table" and v.__isThemeColor then
+            inst[k] = Colors[v.Key]
+            table.insert(ExhibitionLib.ThemeInstances, { Inst = inst, Prop = k, Key = v.Key })
+        else
+            inst[k] = v
+        end
+    end
+    return inst
+end
+
+local function Lerp(a, b, t)
+    return a + (b - a) * t
+end
+
+-- Global Opacity (0 to 1)
+local GlobalOpacity = { Value = 0, Target = 0, Speed = 25 }
 
 -- Render loop for global animations
 RunService.RenderStepped:Connect(function(dt)
