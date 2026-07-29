@@ -72,7 +72,10 @@ function ExhibitionLib:UpdateColor(key, col)
             obj.Inst[obj.Prop] = col
         elseif obj.Key1 == key or obj.Key2 == key then
             if obj.Type == 'Gradient' then
-                obj.Inst.Color = ColorSequence.new(Colors[obj.Key1], Colors[obj.Key2])
+                obj.Inst.Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, Colors[obj.Key1]),
+                    ColorSequenceKeypoint.new(1, Colors[obj.Key2])
+                })
             end
         end
     end
@@ -147,12 +150,19 @@ local function CreateUIGradient(parent, topKey, botKey)
         Rotation = 90,
         Parent = parent
     })
+    local topColor, botColor
     if type(topKey) == "string" then
-        grad.Color = ColorSequence.new(Colors[topKey], Colors[botKey])
+        topColor = Colors[topKey]
+        botColor = Colors[botKey]
         table.insert(ExhibitionLib.ThemeInstances, { Type = "Gradient", Inst = grad, Key1 = topKey, Key2 = botKey })
     else
-        grad.Color = ColorSequence.new(topKey, botKey)
+        topColor = topKey
+        botColor = botKey
     end
+    grad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, topColor),
+        ColorSequenceKeypoint.new(1, botColor)
+    })
     return grad
 end
 
@@ -617,7 +627,10 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local function SetState(s)
                     state = s
-                    fillGrad.Color = ColorSequence.new(state and Colors.Accent or Colors.ElemGradTop, state and Colors.Accent or Colors.ElemGradBot)
+                    fillGrad.Color = ColorSequence.new({
+                        ColorSequenceKeypoint.new(0, state and Colors.Accent or Colors.ElemGradTop),
+                        ColorSequenceKeypoint.new(1, state and Colors.Accent or Colors.ElemGradBot)
+                    })
                     cb(state)
                 end
                 
