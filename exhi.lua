@@ -369,7 +369,8 @@ function ExhibitionLib:CreateWindow(cfg)
     function WindowAPI:CreateTab(tcfg)
         tcfg = tcfg or {}
         local tabName = tcfg.Name or "Tab"
-        local tabIcon = tcfg.Icon or ExhibitionLib.Icons[tabName] or "⚙"
+        -- Prefer the font icon mapping by name; fall back to user-provided icon or gear
+        local tabIcon = ExhibitionLib.Icons[tabName] or tcfg.Icon or "⚙"
         local tabIndex = #self.Tabs + 1
         
         local tabBtn = Create("TextButton", {
@@ -851,12 +852,18 @@ function ExhibitionLib:CreateWindow(cfg)
                 local dropList = Create("Frame", {
                     BackgroundColor3 = ThemeColor("GroupBorderOut"),
                     BorderSizePixel = 0,
-                    Position = UDim2.new(0, 0, 1, 0),
-                    Size = UDim2.new(1, 0, 0, #options * 11 * GUI_SCALE),
+                    Size = UDim2.new(0, boxOut.AbsoluteSize.X, 0, #options * 11 * GUI_SCALE),
                     Visible = false,
-                    ZIndex = 15,
-                    Parent = boxOut
+                    ZIndex = 200,
+                    Parent = sg
                 })
+                
+                local function PositionDropList()
+                    local absPos = boxOut.AbsolutePosition
+                    local absSize = boxOut.AbsoluteSize
+                    dropList.Position = UDim2.new(0, absPos.X, 0, absPos.Y + absSize.Y)
+                    dropList.Size = UDim2.new(0, absSize.X, 0, #options * 11 * GUI_SCALE)
+                end
                 RegisterOpacity(dropList, "BackgroundTransparency")
                 
                 local dropListIn = Create("Frame", {
@@ -864,7 +871,7 @@ function ExhibitionLib:CreateWindow(cfg)
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 1, 0, 1),
                     Size = UDim2.new(1, -2, 1, -2),
-                    ZIndex = 15,
+                    ZIndex = 200,
                     Parent = dropList
                 })
                 RegisterOpacity(dropListIn, "BackgroundTransparency")
@@ -884,7 +891,7 @@ function ExhibitionLib:CreateWindow(cfg)
                             TextColor3 = opt == selected and Colors.Accent or Colors.TextPrimary,
                             TextSize = 9 * GUI_SCALE,
                             TextXAlignment = Enum.TextXAlignment.Left,
-                            ZIndex = 16,
+                            ZIndex = 201,
                             Parent = dropListIn
                         })
                         
@@ -900,7 +907,6 @@ function ExhibitionLib:CreateWindow(cfg)
                             open = false
                             dropList.Visible = false
                             arrow.Rotation = 0
-                            secOut.ZIndex = 1
                             UpdateOptions()
                         end)
                     end
@@ -908,14 +914,12 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 boxIn.MouseButton1Click:Connect(function()
                     open = not open
+                    if open then
+                        PositionDropList()
+                        UpdateOptions()
+                    end
                     dropList.Visible = open
                     arrow.Rotation = open and -90 or 0
-                    if open then 
-                        UpdateOptions() 
-                        secOut.ZIndex = 50 
-                    else
-                        secOut.ZIndex = 1
-                    end
                 end)
                 
                 UpdateOptions()
