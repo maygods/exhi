@@ -213,7 +213,7 @@ function ExhibitionLib:CreateWindow(cfg)
     -- Main Window Wrap
     local window = Create("Frame", {
         Name = "Window",
-        BackgroundColor3 = ThemeColor("Border1"), -- 10
+        BackgroundColor3 = ThemeColor("Border2"), -- Outermost Grey Outline
         BorderSizePixel = 0,
         Position = UDim2.new(0.5, -SCALED_SIZE.X/2, 0.5, -SCALED_SIZE.Y/2),
         Size = UDim2.new(0, SCALED_SIZE.X, 0, SCALED_SIZE.Y),
@@ -226,10 +226,11 @@ function ExhibitionLib:CreateWindow(cfg)
         Parent = window
     })
     
-    -- Nested Borders (10 -> 60 -> 40 -> 60 -> 22)
-    local b2 = DrawBorder(window, {Colors.Border2}) -- 60
-    local b3 = DrawBorder(b2, {Colors.Border3}) -- 40
-    local innerBorder = DrawBorder(b3, {Colors.Border2}) -- 60
+    -- Nested Borders (Grey -> Black -> Grey -> DarkGrey -> Grey -> Fill)
+    local b1 = DrawBorder(window, {Colors.Border1})
+    local b2 = DrawBorder(b1, {Colors.Border2})
+    local b3 = DrawBorder(b2, {Colors.Border3})
+    local innerBorder = DrawBorder(b3, {Colors.Border2})
     
     -- Main Fill
     local main = Create("Frame", {
@@ -793,8 +794,6 @@ function ExhibitionLib:CreateWindow(cfg)
                 })
                 
                 local nameLbl = DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Slider"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
-                local valLbl = DrawTextWithShadow(wrap, tostring(val)..suf, Fonts.Bold, 9 * GUI_SCALE, Colors.TextPrimary, UDim2.new(0, 0, 0, 15 * GUI_SCALE), Enum.TextXAlignment.Center, 2)
-                valLbl.Size = UDim2.new(1, 0, 0, 9 * GUI_SCALE)
                 
                 local trackOut = Create("Frame", {
                     BackgroundColor3 = ThemeColor("GroupBorderOut"),
@@ -804,6 +803,10 @@ function ExhibitionLib:CreateWindow(cfg)
                     Parent = wrap
                 })
                 RegisterOpacity(trackOut, "BackgroundTransparency")
+                
+                local valLbl = DrawTextWithShadow(trackOut, tostring(val)..suf, Fonts.Bold, 9 * GUI_SCALE, Colors.TextPrimary, UDim2.new(0, 0, 0, 5 * GUI_SCALE), Enum.TextXAlignment.Center, 2)
+                valLbl.AnchorPoint = Vector2.new(0.5, 0)
+                valLbl.Size = UDim2.new(0, 40 * GUI_SCALE, 0, 9 * GUI_SCALE)
                 
                 local trackIn = Create("Frame", {
                     BackgroundColor3 = ThemeColor("Black"),
@@ -845,6 +848,7 @@ function ExhibitionLib:CreateWindow(cfg)
                     end
                     
                     valLbl.Text = tostring(math.floor(val * 10) / 10)..suf
+                    valLbl.Position = UDim2.new(p, 0, 0, 5 * GUI_SCALE)
                     cb(val)
                 end
                 SetVal(val)
