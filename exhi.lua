@@ -143,6 +143,7 @@ local function DrawBorder(parent, colors)
             Size = current == parent and UDim2.new(1,0,1,0) or UDim2.new(1,-2,1,-2),
             Parent = current
         })
+        RegisterOpacity(f, "BackgroundTransparency", 0, true)
         current = f
     end
     return current
@@ -386,6 +387,7 @@ function ExhibitionLib:CreateWindow(cfg)
     local tabsContainer = Create("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
+        ZIndex = 5,
         Parent = sidebar
     })
     -- Removed UIListLayout so we can Tween exact offset
