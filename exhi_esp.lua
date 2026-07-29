@@ -69,7 +69,7 @@ local function GetBoundingBox(char)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return nil end
     local cf = hrp.CFrame
-    local size = Vector3.new(4, 5.5, 4) -- Generous bounds for a Roblox character
+    local size = Vector3.new(2.5, 5.5, 2.5) -- Tighter bounds for Roblox characters (less huge up close)
     
     local corners = {
         cf * CFrame.new(size.X/2, size.Y/2, size.Z/2),
@@ -306,5 +306,12 @@ local function UpdateESP()
 end
 
 RunService.RenderStepped:Connect(UpdateESP)
+
+Players.PlayerRemoving:Connect(function(plr)
+    if ESP.Cache[plr] then
+        ESP.Cache[plr].Container:Destroy()
+        ESP.Cache[plr] = nil
+    end
+end)
 
 return ESP
