@@ -111,10 +111,12 @@ RunService.RenderStepped:Connect(function(dt)
         GlobalOpacity.Value = GlobalOpacity.Target
     end
     
+    local opacity = GlobalOpacity.Value * (ExhibitionLib.OpacityMultiplier or 1.0)
+    
     -- Update all registered elements with opacity
     for _, obj in ipairs(ExhibitionLib.Instances) do
         if obj.Type == "Transparency" then
-            obj.Inst[obj.Prop] = 1 - ((1 - obj.Base) * GlobalOpacity.Value)
+            obj.Inst[obj.Prop] = 1 - ((1 - obj.Base) * opacity)
         elseif obj.Type == "Gradient" then
             -- Optional dynamic gradient alpha
         end
@@ -313,6 +315,21 @@ function ExhibitionLib:CreateWindow(cfg)
     CreateGripLine(UDim2.new(0, 6, 0, 4))
     CreateGripLine(UDim2.new(0, 8, 0, 2))
     
+    local resetHandle = Create("TextButton", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(1, -25 * GUI_SCALE, 1, -15 * GUI_SCALE),
+        Size = UDim2.new(0, 15 * GUI_SCALE, 0, 15 * GUI_SCALE),
+        Text = "R",
+        TextColor3 = ThemeColor("TextMuted"),
+        Font = Fonts.Regular,
+        TextSize = 10 * GUI_SCALE,
+        ZIndex = 50,
+        Parent = window
+    })
+    resetHandle.MouseButton1Click:Connect(function()
+        window.Size = UDim2.new(0, 340 * GUI_SCALE, 0, 340 * GUI_SCALE)
+    end)
+    
     local resizing = false
     local resizeStart, startSize
     resizeHandle.InputBegan:Connect(function(input)
@@ -347,15 +364,21 @@ function ExhibitionLib:CreateWindow(cfg)
     local sidebar = Create("Frame", {
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 3 * GUI_SCALE, 0, 15 * GUI_SCALE),
-        Size = UDim2.new(0, 37 * GUI_SCALE, 1, -18 * GUI_SCALE),
+        Size = UDim2.new(0.11, 0, 1, -18 * GUI_SCALE),
         Parent = main
     })
     
     local sidebarActiveBG = Create("Frame", {
         BackgroundColor3 = ThemeColor("SidebarBG"),
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 40 * GUI_SCALE),
+        Size = UDim2.new(1, 0, 1, 0),
         Parent = sidebar
+    })
+    Create("UIAspectRatioConstraint", {
+        AspectRatio = 1,
+        AspectType = Enum.AspectType.FitWithinMaxSize,
+        DominantAxis = Enum.DominantAxis.Width,
+        Parent = sidebarActiveBG
     })
     RegisterOpacity(sidebarActiveBG, "BackgroundTransparency")
     DrawBorder(sidebarActiveBG, {Colors.Black, Colors.GroupBorderIn})
@@ -365,12 +388,29 @@ function ExhibitionLib:CreateWindow(cfg)
         Size = UDim2.new(1, 0, 1, 0),
         Parent = sidebar
     })
+    local tabsListLayout = Create("UIListLayout", {
+        Parent = tabsContainer,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        FillDirection = Enum.FillDirection.Vertical
+    })
+    
+    local WindowAPI = {
+        Tabs = {},
+        ActiveTab = nil
+    }
+    
+    sidebar:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+        if WindowAPI.ActiveTab then
+            local h = sidebar.AbsoluteSize.X
+            sidebarActiveBG.Position = UDim2.new(0, 0, 0, (WindowAPI.ActiveTab.Index - 1) * h)
+        end
+    end)
     
     -- Content Area
     local contentArea = Create("Frame", {
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 50 * GUI_SCALE, 0, 15 * GUI_SCALE),
-        Size = UDim2.new(1, -55 * GUI_SCALE, 1, -20 * GUI_SCALE),
+        Position = UDim2.new(0.11, 8 * GUI_SCALE, 0, 15 * GUI_SCALE),
+        Size = UDim2.new(0.89, -10 * GUI_SCALE, 1, -20 * GUI_SCALE),
         Parent = main
     })
     
@@ -430,11 +470,6 @@ function ExhibitionLib:CreateWindow(cfg)
         end
     end)
     
-    local WindowAPI = {
-        Tabs = {},
-        ActiveTab = nil
-    }
-    
     function WindowAPI:CreateTab(tcfg)
         tcfg = tcfg or {}
         local tabName = tcfg.Name or "Tab"
@@ -444,10 +479,16 @@ function ExhibitionLib:CreateWindow(cfg)
         
         local tabBtn = Create("TextButton", {
             BackgroundTransparency = 1,
-            Position = UDim2.new(0, 0, 0, (tabIndex - 1) * 40 * GUI_SCALE),
-            Size = UDim2.new(1, 0, 0, 40 * GUI_SCALE),
+            Size = UDim2.new(1, 0, 1, 0),
             Text = "",
+            LayoutOrder = tabIndex,
             Parent = tabsContainer
+        })
+        Create("UIAspectRatioConstraint", {
+            AspectRatio = 1,
+            AspectType = Enum.AspectType.FitWithinMaxSize,
+            DominantAxis = Enum.DominantAxis.Width,
+            Parent = tabBtn
         })
         
         -- Fallback to text if icon isn't A-Z mapped (like if they use an emoji custom icon)
@@ -466,7 +507,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 BackgroundTransparency = 1,
                 AnchorPoint = Vector2.new(0.5, 0.5),
                 Position = UDim2.new(0.5, 0, 0.5, 0),
-                Size = UDim2.new(0, 20 * GUI_SCALE, 0, 20 * GUI_SCALE),
+                Size = UDim2.new(0.5, 0, 0.5, 0),
                 Image = getcustomasset(iconPath),
                 ImageColor3 = ThemeColor("SidebarInactive"),
                 ScaleType = Enum.ScaleType.Fit,
@@ -482,10 +523,11 @@ function ExhibitionLib:CreateWindow(cfg)
                 Font = Fonts.Regular,
                 Text = tabIcon,
                 TextColor3 = ThemeColor("SidebarInactive"),
-                TextSize = 18 * GUI_SCALE,
+                TextScaled = true,
                 ZIndex = 2,
                 Parent = tabBtn
             })
+            Create("UITextSizeConstraint", { MaxTextSize = 24 * GUI_SCALE, Parent = tabIconLbl })
             RegisterOpacity(tabIconLbl, "TextTransparency")
         end
         
@@ -521,7 +563,7 @@ function ExhibitionLib:CreateWindow(cfg)
             self.ActiveTab.Content.Visible = true
             
             -- Move active indicator
-            local targetY = (tabIndex - 1) * 40 * GUI_SCALE
+            local targetY = (tabIndex - 1) * sidebar.AbsoluteSize.X
             TweenService:Create(sidebarActiveBG, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, targetY)}):Play()
         end
         
