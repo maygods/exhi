@@ -40,8 +40,8 @@ local Colors = {
 }
 
 local Fonts = {
-    Bold = Enum.Font.GothamBold,
-    Regular = Enum.Font.Gotham,
+    Bold = Enum.Font.SourceSansBold,
+    Regular = Enum.Font.SourceSans,
 }
 
 local GUI_SCALE = 1.7 -- 340 * 1.7 = 578 (close to 580)
@@ -271,7 +271,8 @@ function ExhibitionLib:CreateWindow(cfg)
     local sidebarActiveIndicator = Create("Frame", {
         BackgroundColor3 = Colors.Accent,
         BorderSizePixel = 0,
-        Size = UDim2.new(0, 2 * GUI_SCALE, 1, 0),
+        Position = UDim2.new(0, 3 * GUI_SCALE, 0.5, -6 * GUI_SCALE),
+        Size = UDim2.new(0, 3 * GUI_SCALE, 0, 12 * GUI_SCALE),
         Parent = sidebarActiveBG
     })
     RegisterOpacity(sidebarActiveIndicator, "BackgroundTransparency")
@@ -641,6 +642,42 @@ function ExhibitionLib:CreateWindow(cfg)
                     SetVal(min + (max - min) * (px / w))
                 end
                 
+                local minusBtn = Create("TextButton", {
+                    BackgroundTransparency = 1,
+                    Position = UDim2.new(0, -3 * GUI_SCALE, 0, 11 * GUI_SCALE),
+                    Size = UDim2.new(0, 1.5 * GUI_SCALE, 0, 0.5 * GUI_SCALE),
+                    BackgroundColor3 = Colors.TextDim,
+                    Text = "",
+                    Parent = wrap
+                })
+                RegisterOpacity(minusBtn, "BackgroundTransparency", 0.5)
+                
+                local plusBtn = Create("TextButton", {
+                    BackgroundTransparency = 1,
+                    Position = UDim2.new(1, 0.5 * GUI_SCALE, 0, 10.5 * GUI_SCALE),
+                    Size = UDim2.new(0, 1 * GUI_SCALE, 0, 1.5 * GUI_SCALE),
+                    BackgroundColor3 = Colors.TextDim,
+                    Text = "",
+                    Parent = wrap
+                })
+                RegisterOpacity(plusBtn, "BackgroundTransparency", 0.5)
+                local plusBtnH = Create("Frame", {
+                    BorderSizePixel = 0,
+                    Position = UDim2.new(0.5, -0.75 * GUI_SCALE, 0.5, -0.25 * GUI_SCALE),
+                    Size = UDim2.new(0, 1.5 * GUI_SCALE, 0, 0.5 * GUI_SCALE),
+                    BackgroundColor3 = Colors.TextDim,
+                    Parent = plusBtn
+                })
+                RegisterOpacity(plusBtnH, "BackgroundTransparency", 0.5)
+                
+                minusBtn.MouseButton1Click:Connect(function() SetVal(val - (max-min)/100) end)
+                plusBtn.MouseButton1Click:Connect(function() SetVal(val + (max-min)/100) end)
+                
+                minusBtn.MouseEnter:Connect(function() minusBtn.BackgroundTransparency = 0 end)
+                minusBtn.MouseLeave:Connect(function() minusBtn.BackgroundTransparency = 0.5 end)
+                plusBtn.MouseEnter:Connect(function() plusBtn.BackgroundTransparency = 0; plusBtnH.BackgroundTransparency = 0 end)
+                plusBtn.MouseLeave:Connect(function() plusBtn.BackgroundTransparency = 0.5; plusBtnH.BackgroundTransparency = 0.5 end)
+
                 trackOut.InputBegan:Connect(function(i)
                     if i.UserInputType == Enum.UserInputType.MouseButton1 then
                         dragging = true
