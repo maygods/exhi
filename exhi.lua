@@ -517,7 +517,11 @@ function ExhibitionLib:CreateWindow(cfg)
         local TabAPI = {
             Sections = {},
             Columns = {{}, {}, {}},
-            ColXs = {0, 95 * GUI_SCALE + 15 * GUI_SCALE, (95 * GUI_SCALE + 15 * GUI_SCALE) * 2},
+            ColXs = {
+                UDim2.new(0, 0, 0, 0),
+                UDim2.new(0.333, 3 * GUI_SCALE, 0, 0),
+                UDim2.new(0.666, 6 * GUI_SCALE, 0, 0)
+            },
             ColYs = {0, 0, 0}
         }
         
@@ -538,8 +542,8 @@ function ExhibitionLib:CreateWindow(cfg)
             local secOut = Create("Frame", {
                 BackgroundColor3 = ThemeColor("GroupBorderOut"),
                 BorderSizePixel = 0,
-                Position = UDim2.new(0, self.ColXs[col], 0, self.ColYs[col]),
-                Size = UDim2.new(0, 95 * GUI_SCALE, 0, 20), -- Height updated dynamically
+                Position = UDim2.new(self.ColXs[col].X.Scale, self.ColXs[col].X.Offset, 0, self.ColYs[col]),
+                Size = UDim2.new(0.333, -6 * GUI_SCALE, 0, 20), -- Height updated dynamically
                 Parent = tabContent
             })
             
@@ -549,7 +553,7 @@ function ExhibitionLib:CreateWindow(cfg)
             local function RecalculateCol()
                 local cy = 0
                 for _, s in ipairs(self.Columns[col]) do
-                    s.Out.Position = UDim2.new(0, self.ColXs[col], 0, cy)
+                    s.Out.Position = UDim2.new(self.ColXs[col].X.Scale, self.ColXs[col].X.Offset, 0, cy)
                     cy = cy + s.Height + 10 * GUI_SCALE
                 end
                 self.ColYs[col] = cy
@@ -609,7 +613,7 @@ function ExhibitionLib:CreateWindow(cfg)
             
             local function UpdateSectionHeight()
                 secObj.Height = listLayout.AbsoluteContentSize.Y + 16 * GUI_SCALE
-                secOut.Size = UDim2.new(0, 95 * GUI_SCALE, 0, secObj.Height)
+                secOut.Size = UDim2.new(0.333, -6 * GUI_SCALE, 0, secObj.Height)
                 RecalculateCol()
             end
             
