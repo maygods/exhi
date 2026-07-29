@@ -138,10 +138,10 @@ local function DrawTextWithShadow(parent, text, font, size, color, pos, align, z
         Parent = parent
     })
     
-    -- Outline effect (Skeet uses 4 offset draws or similar)
     local offsets = { UDim2.new(0,-1,0,0), UDim2.new(0,1,0,0), UDim2.new(0,0,0,-1), UDim2.new(0,0,0,1) }
+    local shadows = {}
     for _, off in ipairs(offsets) do
-        Create("TextLabel", {
+        local sl = Create("TextLabel", {
             BackgroundTransparency = 1,
             Position = off,
             Size = UDim2.new(1,0,1,0),
@@ -153,7 +153,12 @@ local function DrawTextWithShadow(parent, text, font, size, color, pos, align, z
             ZIndex = (zindex or 2) - 1,
             Parent = lbl
         })
+        table.insert(shadows, sl)
     end
+    
+    lbl:GetPropertyChangedSignal("Text"):Connect(function()
+        for _, sl in ipairs(shadows) do sl.Text = lbl.Text end
+    end)
     
     return lbl
 end
@@ -401,7 +406,8 @@ function ExhibitionLib:CreateWindow(cfg)
         -- Tab API
         local TabAPI = {
             Sections = {},
-            ColXs = {0, 95 * GUI_SCALE + 15, (95 * GUI_SCALE + 15) * 2},
+            Columns = {{}, {}, {}},
+            ColXs = {0, 95 * GUI_SCALE + 15 * GUI_SCALE, (95 * GUI_SCALE + 15 * GUI_SCALE) * 2},
             ColYs = {0, 0, 0}
         }
         
@@ -426,6 +432,20 @@ function ExhibitionLib:CreateWindow(cfg)
                 Size = UDim2.new(0, 95 * GUI_SCALE, 0, 20), -- Height updated dynamically
                 Parent = tabContent
             })
+            
+            local secObj = { Out = secOut, Height = 16 * GUI_SCALE }
+            table.insert(self.Columns[col], secObj)
+            
+            local function RecalculateCol()
+                local cy = 0
+                for _, s in ipairs(self.Columns[col]) do
+                    s.Out.Position = UDim2.new(0, self.ColXs[col], 0, cy)
+                    cy = cy + s.Height + 10 * GUI_SCALE
+                end
+                self.ColYs[col] = cy
+            end
+            
+            RecalculateCol()
             RegisterOpacity(secOut, "BackgroundTransparency")
             
             local secIn = Create("Frame", {
@@ -478,9 +498,9 @@ function ExhibitionLib:CreateWindow(cfg)
             })
             
             local function UpdateSectionHeight()
-                local h = listLayout.AbsoluteContentSize.Y + 16 * GUI_SCALE
-                secOut.Size = UDim2.new(0, 95 * GUI_SCALE, 0, h)
-                self.ColYs[col] = self.ColYs[col] + h + 10 * GUI_SCALE
+                secObj.Height = listLayout.AbsoluteContentSize.Y + 16 * GUI_SCALE
+                secOut.Size = UDim2.new(0, 95 * GUI_SCALE, 0, secObj.Height)
+                RecalculateCol()
             end
             
             listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(UpdateSectionHeight)
@@ -747,9 +767,9 @@ function ExhibitionLib:CreateWindow(cfg)
                     Size = UDim2.new(0, 4 * GUI_SCALE, 0, 2 * GUI_SCALE),
                     Parent = boxIn
                 })
-                local a1 = Create("Frame", {BackgroundColor3 = Colors.TextMuted, BorderSizePixel=0, Position=UDim2.new(0,0,0,0), Size=UDim2.new(1,0,0,1), Parent=arrow})
-                local a2 = Create("Frame", {BackgroundColor3 = Colors.TextMuted, BorderSizePixel=0, Position=UDim2.new(0,1,0,1), Size=UDim2.new(1,-2,0,1), Parent=arrow})
-                local a3 = Create("Frame", {BackgroundColor3 = Colors.TextMuted, BorderSizePixel=0, Position=UDim2.new(0,2,0,2), Size=UDim2.new(1,-4,0,1), Parent=arrow})
+                local a1 = Create("Frame", {BackgroundColor3 = Colors.TextMuted, BorderSizePixel=0, Position=UDim2.new(0,0,0,0), Size=UDim2.new(1,0,0,1*GUI_SCALE), Parent=arrow})
+                local a2 = Create("Frame", {BackgroundColor3 = Colors.TextMuted, BorderSizePixel=0, Position=UDim2.new(0,1*GUI_SCALE,0,1*GUI_SCALE), Size=UDim2.new(1,-2*GUI_SCALE,0,1*GUI_SCALE), Parent=arrow})
+                local a3 = Create("Frame", {BackgroundColor3 = Colors.TextMuted, BorderSizePixel=0, Position=UDim2.new(0,2*GUI_SCALE,0,2*GUI_SCALE), Size=UDim2.new(1,-4*GUI_SCALE,0,1*GUI_SCALE), Parent=arrow})
                 
                 local dropList = Create("Frame", {
                     BackgroundColor3 = Colors.GroupBorderOut,
@@ -803,6 +823,7 @@ function ExhibitionLib:CreateWindow(cfg)
                             open = false
                             dropList.Visible = false
                             arrow.Rotation = 0
+                            secOut.ZIndex = 1
                             UpdateOptions()
                         end)
                     end
@@ -812,7 +833,12 @@ function ExhibitionLib:CreateWindow(cfg)
                     open = not open
                     dropList.Visible = open
                     arrow.Rotation = open and -90 or 0
-                    if open then UpdateOptions() end
+                    if open then 
+                        UpdateOptions() 
+                        secOut.ZIndex = 50 
+                    else
+                        secOut.ZIndex = 1
+                    end
                 end)
                 
                 UpdateOptions()
