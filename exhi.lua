@@ -277,6 +277,48 @@ function ExhibitionLib:CreateWindow(cfg)
         end
     end)
     
+    -- Resize Handle (bottom-right corner)
+    local MIN_W = 200 * GUI_SCALE
+    local MIN_H = 150 * GUI_SCALE
+    local resizeHandle = Create("TextButton", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(1, -10, 1, -10),
+        Size = UDim2.new(0, 10, 0, 10),
+        Text = "",
+        ZIndex = 50,
+        Parent = window
+    })
+    -- Diagonal grip lines
+    Create("Frame", { BackgroundColor3 = Colors.TextMuted, BorderSizePixel = 0, Position = UDim2.new(0, 6, 0, 8), Size = UDim2.new(0, 2, 0, 2), ZIndex = 51, Parent = resizeHandle })
+    Create("Frame", { BackgroundColor3 = Colors.TextMuted, BorderSizePixel = 0, Position = UDim2.new(0, 4, 0, 6), Size = UDim2.new(0, 2, 0, 2), ZIndex = 51, Parent = resizeHandle })
+    Create("Frame", { BackgroundColor3 = Colors.TextMuted, BorderSizePixel = 0, Position = UDim2.new(0, 2, 0, 4), Size = UDim2.new(0, 2, 0, 2), ZIndex = 51, Parent = resizeHandle })
+    Create("Frame", { BackgroundColor3 = Colors.TextMuted, BorderSizePixel = 0, Position = UDim2.new(0, 8, 0, 6), Size = UDim2.new(0, 2, 0, 2), ZIndex = 51, Parent = resizeHandle })
+    Create("Frame", { BackgroundColor3 = Colors.TextMuted, BorderSizePixel = 0, Position = UDim2.new(0, 6, 0, 4), Size = UDim2.new(0, 2, 0, 2), ZIndex = 51, Parent = resizeHandle })
+    Create("Frame", { BackgroundColor3 = Colors.TextMuted, BorderSizePixel = 0, Position = UDim2.new(0, 8, 0, 2), Size = UDim2.new(0, 2, 0, 2), ZIndex = 51, Parent = resizeHandle })
+    
+    local resizing = false
+    local resizeStart, startSize
+    resizeHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            resizing = true
+            resizeStart = input.Position
+            startSize = window.AbsoluteSize
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    resizing = false
+                end
+            end)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - resizeStart
+            local newW = math.max(MIN_W, startSize.X + delta.X)
+            local newH = math.max(MIN_H, startSize.Y + delta.Y)
+            window.Size = UDim2.new(0, newW, 0, newH)
+        end
+    end)
+    
     -- Sidebar
     local sidebar = Create("Frame", {
         BackgroundTransparency = 1,
@@ -288,20 +330,11 @@ function ExhibitionLib:CreateWindow(cfg)
     local sidebarActiveBG = Create("Frame", {
         BackgroundColor3 = ThemeColor("SidebarBG"),
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 40 * GUI_SCALE), -- Height of one tab
+        Size = UDim2.new(1, 0, 0, 40 * GUI_SCALE),
         Parent = sidebar
     })
     RegisterOpacity(sidebarActiveBG, "BackgroundTransparency")
     DrawBorder(sidebarActiveBG, {Colors.Black, Colors.GroupBorderIn})
-    
-    local sidebarActiveIndicator = Create("Frame", {
-        BackgroundColor3 = ThemeColor("Accent"),
-        BorderSizePixel = 0,
-        Position = UDim2.new(0, 3 * GUI_SCALE, 0.5, -6 * GUI_SCALE),
-        Size = UDim2.new(0, 3 * GUI_SCALE, 0, 12 * GUI_SCALE),
-        Parent = sidebarActiveBG
-    })
-    RegisterOpacity(sidebarActiveIndicator, "BackgroundTransparency")
     
     local tabsContainer = Create("Frame", {
         BackgroundTransparency = 1,
