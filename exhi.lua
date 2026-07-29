@@ -33,6 +33,7 @@ local Colors = {
     SelectedText   = Color3.fromRGB(150, 150, 150),
     Accent         = Color3.fromRGB(165, 241, 165),
     Black          = Color3.fromRGB(0, 0, 0),
+    White          = Color3.fromRGB(255, 255, 255),
     SidebarActive  = Color3.fromRGB(210, 210, 210),
     SidebarHover   = Color3.fromRGB(165, 165, 165),
     SidebarInactive= Color3.fromRGB(91, 91, 91),
@@ -146,8 +147,12 @@ local function CreateUIGradient(parent, topKey, botKey)
         Rotation = 90,
         Parent = parent
     })
-    grad.Color = ColorSequence.new(Colors[topKey], Colors[botKey])
-    table.insert(ExhibitionLib.ThemeInstances, { Type = "Gradient", Inst = grad, Key1 = topKey, Key2 = botKey })
+    if type(topKey) == "string" then
+        grad.Color = ColorSequence.new(Colors[topKey], Colors[botKey])
+        table.insert(ExhibitionLib.ThemeInstances, { Type = "Gradient", Inst = grad, Key1 = topKey, Key2 = botKey })
+    else
+        grad.Color = ColorSequence.new(topKey, botKey)
+    end
     return grad
 end
 
@@ -873,7 +878,7 @@ function ExhibitionLib:CreateWindow(cfg)
                         -- Indent slightly
                         local pad = Create("UIPadding", {PaddingLeft = UDim.new(0, 3 * GUI_SCALE), Parent=obtn})
                         
-                        obtn.MouseEnter:Connect(function() TweenService:Create(obtn, TweenInfo.new(0.1), {TextColor3 = ThemeColor("Hover")}):Play() end)
+                        obtn.MouseEnter:Connect(function() TweenService:Create(obtn, TweenInfo.new(0.1), {TextColor3 = Colors.Hover}):Play() end)
                         obtn.MouseLeave:Connect(function() TweenService:Create(obtn, TweenInfo.new(0.1), {TextColor3 = opt == selected and Colors.Accent or Colors.TextPrimary}):Play() end)
                         obtn.MouseButton1Click:Connect(function()
                             selected = opt
