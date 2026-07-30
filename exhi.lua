@@ -8,7 +8,6 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
-local TextService = game:GetService("TextService")
 
 local Colors = {
     MainFill       = Color3.fromRGB(22, 22, 22),
@@ -650,19 +649,24 @@ function ExhibitionLib:CreateWindow(cfg)
             })
             RegisterOpacity(secFill, "BackgroundTransparency")
             
-            local textWidth = TextService:GetTextSize(secName, 9 * GUI_SCALE, Fonts.Regular, Vector2.new(math.huge, math.huge)).X
-            
             -- Title Break Effect
             local titleBg = Create("Frame", {
                 BackgroundColor3 = ThemeColor("MainFill"), -- Matches the main window background to create a seamless gap
                 BorderSizePixel = 0,
                 Position = UDim2.new(0, 5 * GUI_SCALE, 0, 0),
-                Size = UDim2.new(0, textWidth + 4 * GUI_SCALE, 0, 2), -- 2 pixels tall to exactly cover the BorderOut and BorderIn
+                Size = UDim2.new(0, 50, 0, 2), -- 2 pixels tall to exactly cover the BorderOut and BorderIn
                 Parent = secOut
             })
             RegisterOpacity(titleBg, "BackgroundTransparency")
             
             local secTitle = DrawTextWithShadow(secOut, secName, Fonts.Regular, 9 * GUI_SCALE, Colors.TextPrimary, UDim2.new(0, 7 * GUI_SCALE, 0, -5 * GUI_SCALE), Enum.TextXAlignment.Left, 5)
+            
+            task.spawn(function()
+                if secTitle.TextBounds.X == 0 then
+                    secTitle:GetPropertyChangedSignal("TextBounds"):Wait()
+                end
+                titleBg.Size = UDim2.new(0, secTitle.TextBounds.X + 4 * GUI_SCALE, 0, 2)
+            end)
             
             local secBody = Create("Frame", {
                 BackgroundTransparency = 1,
