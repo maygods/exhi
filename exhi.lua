@@ -993,8 +993,8 @@ function ExhibitionLib:CreateWindow(cfg)
                 local cSize = math.floor(1.5 * GUI_SCALE)
                 if cSize % 2 == 0 then cSize = cSize + 1 end
                 local cOff = math.floor(cSize / 2)
-                local edgeOffset = 4 * GUI_SCALE -- Section padding
-                local gap = math.floor(1 * GUI_SCALE) -- Small visual gap to keep the slider track as long as possible
+                local gap = math.floor(3 * GUI_SCALE) -- 6-pixel gap
+                local edgeOffset = 4 * GUI_SCALE + gap -- Push buttons further out to make track longer
 
                 local trackOut = Create("Frame", {
                     BackgroundColor3 = ThemeColor("GroupBorderOut"),
