@@ -909,8 +909,8 @@ function ExhibitionLib:CreateWindow(cfg)
                 local trackOut = Create("Frame", {
                     BackgroundColor3 = ThemeColor("GroupBorderOut"),
                     BorderSizePixel = 0,
-                    Position = UDim2.new(0, 6 * GUI_SCALE, 0, 10 * GUI_SCALE),
-                    Size = UDim2.new(1, -12 * GUI_SCALE, 0, 4.5 * GUI_SCALE),
+                    Position = UDim2.new(0, 4 * GUI_SCALE, 0, 10 * GUI_SCALE),
+                    Size = UDim2.new(1, -8 * GUI_SCALE, 0, 4.5 * GUI_SCALE),
                     Parent = wrap
                 })
                 RegisterOpacity(trackOut, "BackgroundTransparency")
@@ -990,26 +990,29 @@ function ExhibitionLib:CreateWindow(cfg)
                 local minusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
                     Position = UDim2.new(0, 0, 0, 8 * GUI_SCALE),
-                    Size = UDim2.new(0, 5 * GUI_SCALE, 0, 10 * GUI_SCALE),
+                    Size = UDim2.new(0, 3 * GUI_SCALE, 0, 10 * GUI_SCALE),
                     Text = "",
                     ZIndex = 2,
                     Parent = wrap
                 })
                 
+                local cSize = math.floor(1.5 * GUI_SCALE)
+                if cSize % 2 == 0 then cSize = cSize + 1 end
+                local cOff = math.floor(cSize / 2)
+                
                 local minusLine = Create("Frame", {
                     BackgroundColor3 = ThemeColor("TextDim"),
                     BorderSizePixel = 0,
-                    AnchorPoint = Vector2.new(0.5, 0.5),
-                    Position = UDim2.new(0.5, 0, 0.5, 0),
-                    Size = UDim2.new(0, 3 * GUI_SCALE, 0, math.max(1, math.floor(0.5 * GUI_SCALE))),
+                    Position = UDim2.new(0.5, -cOff, 0.5, 0),
+                    Size = UDim2.new(0, cSize, 0, 1),
                     Parent = minusBtn
                 })
                 RegisterOpacity(minusLine, "BackgroundTransparency")
                 
                 local plusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(1, -5 * GUI_SCALE, 0, 8 * GUI_SCALE),
-                    Size = UDim2.new(0, 5 * GUI_SCALE, 0, 10 * GUI_SCALE),
+                    Position = UDim2.new(1, -3 * GUI_SCALE, 0, 8 * GUI_SCALE),
+                    Size = UDim2.new(0, 3 * GUI_SCALE, 0, 10 * GUI_SCALE),
                     Text = "",
                     ZIndex = 2,
                     Parent = wrap
@@ -1018,9 +1021,8 @@ function ExhibitionLib:CreateWindow(cfg)
                 local plusLineH = Create("Frame", {
                     BackgroundColor3 = ThemeColor("TextDim"),
                     BorderSizePixel = 0,
-                    AnchorPoint = Vector2.new(0.5, 0.5),
-                    Position = UDim2.new(0.5, 0, 0.5, 0),
-                    Size = UDim2.new(0, 3 * GUI_SCALE, 0, math.max(1, math.floor(0.5 * GUI_SCALE))),
+                    Position = UDim2.new(0.5, -cOff, 0.5, 0),
+                    Size = UDim2.new(0, cSize, 0, 1),
                     Parent = plusBtn
                 })
                 RegisterOpacity(plusLineH, "BackgroundTransparency")
@@ -1028,9 +1030,8 @@ function ExhibitionLib:CreateWindow(cfg)
                 local plusLineV = Create("Frame", {
                     BackgroundColor3 = ThemeColor("TextDim"),
                     BorderSizePixel = 0,
-                    AnchorPoint = Vector2.new(0.5, 0.5),
-                    Position = UDim2.new(0.5, 0, 0.5, 0),
-                    Size = UDim2.new(0, math.max(1, math.floor(0.5 * GUI_SCALE)), 0, 3 * GUI_SCALE),
+                    Position = UDim2.new(0.5, 0, 0.5, -cOff),
+                    Size = UDim2.new(0, 1, 0, cSize),
                     Parent = plusBtn
                 })
                 RegisterOpacity(plusLineV, "BackgroundTransparency")
