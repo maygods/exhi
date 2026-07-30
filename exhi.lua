@@ -632,7 +632,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 local cy = 0
                 for _, s in ipairs(self.Columns[col]) do
                     s.Out.Position = UDim2.new(self.ColXs[col].X.Scale, self.ColXs[col].X.Offset, 0, cy)
-                    cy = cy + s.Height + 5 * GUI_SCALE
+                    cy = cy + s.Height + 4 * GUI_SCALE
                 end
                 self.ColYs[col] = cy
             end
@@ -767,18 +767,24 @@ function ExhibitionLib:CreateWindow(cfg)
                 if ecfg.HasBind then
                     local bindKey = ecfg.BindDefault or "None"
                     local bindCb = ecfg.BindCallback or function() end
-                    
                     local bindBtn = Create("TextButton", {
                         BackgroundTransparency = 1,
-                        Position = UDim2.new(1, -25 * GUI_SCALE, 0, 0),
+                        Position = UDim2.new(0, 50 * GUI_SCALE, 0, 0),
                         Size = UDim2.new(0, 25 * GUI_SCALE, 1, 0),
                         Font = Fonts.Regular,
                         Text = "[" .. (bindKey == "None" and "-" or bindKey) .. "]",
-                        TextColor3 = ThemeColor("TextDim"),
+                        TextColor3 = Colors.TextDim,
                         TextSize = 9 * GUI_SCALE,
-                        TextXAlignment = Enum.TextXAlignment.Right,
+                        TextXAlignment = Enum.TextXAlignment.Left,
                         Parent = btn
                     })
+                    
+                    task.spawn(function()
+                        if nameLbl.TextBounds.X == 0 then
+                            nameLbl:GetPropertyChangedSignal("TextBounds"):Wait()
+                        end
+                        bindBtn.Position = UDim2.new(0, 10 * GUI_SCALE + nameLbl.TextBounds.X + 4 * GUI_SCALE, 0, 0)
+                    end)
                     
                     local binding = false
                     bindBtn.MouseButton1Click:Connect(function()
