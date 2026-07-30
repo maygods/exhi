@@ -909,8 +909,8 @@ function ExhibitionLib:CreateWindow(cfg)
                 local trackOut = Create("Frame", {
                     BackgroundColor3 = ThemeColor("GroupBorderOut"),
                     BorderSizePixel = 0,
-                    Position = UDim2.new(0, 4 * GUI_SCALE, 0, 10 * GUI_SCALE),
-                    Size = UDim2.new(1, -8 * GUI_SCALE, 0, 4.5 * GUI_SCALE), -- 2.5 * scale
+                    Position = UDim2.new(0, 6 * GUI_SCALE, 0, 10 * GUI_SCALE),
+                    Size = UDim2.new(1, -12 * GUI_SCALE, 0, 4.5 * GUI_SCALE),
                     Parent = wrap
                 })
                 RegisterOpacity(trackOut, "BackgroundTransparency")
@@ -990,34 +990,58 @@ function ExhibitionLib:CreateWindow(cfg)
                 local minusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
                     Position = UDim2.new(0, 0, 0, 8 * GUI_SCALE),
-                    Size = UDim2.new(0, 4 * GUI_SCALE, 0, 10 * GUI_SCALE),
-                    Font = Fonts.Regular,
-                    Text = "-",
-                    TextColor3 = ThemeColor("TextDim"),
-                    TextSize = 8 * GUI_SCALE,
+                    Size = UDim2.new(0, 5 * GUI_SCALE, 0, 10 * GUI_SCALE),
+                    Text = "",
                     ZIndex = 2,
                     Parent = wrap
                 })
                 
+                local minusLine = Create("Frame", {
+                    BackgroundColor3 = ThemeColor("TextDim"),
+                    BorderSizePixel = 0,
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    Position = UDim2.new(0.5, 0, 0.5, 0),
+                    Size = UDim2.new(0, 3 * GUI_SCALE, 0, math.max(1, math.floor(0.5 * GUI_SCALE))),
+                    Parent = minusBtn
+                })
+                RegisterOpacity(minusLine, "BackgroundTransparency")
+                
                 local plusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(1, -4 * GUI_SCALE, 0, 8 * GUI_SCALE),
-                    Size = UDim2.new(0, 4 * GUI_SCALE, 0, 10 * GUI_SCALE),
-                    Font = Fonts.Regular,
-                    Text = "+",
-                    TextColor3 = ThemeColor("TextDim"),
-                    TextSize = 8 * GUI_SCALE,
+                    Position = UDim2.new(1, -5 * GUI_SCALE, 0, 8 * GUI_SCALE),
+                    Size = UDim2.new(0, 5 * GUI_SCALE, 0, 10 * GUI_SCALE),
+                    Text = "",
                     ZIndex = 2,
                     Parent = wrap
                 })
+                
+                local plusLineH = Create("Frame", {
+                    BackgroundColor3 = ThemeColor("TextDim"),
+                    BorderSizePixel = 0,
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    Position = UDim2.new(0.5, 0, 0.5, 0),
+                    Size = UDim2.new(0, 3 * GUI_SCALE, 0, math.max(1, math.floor(0.5 * GUI_SCALE))),
+                    Parent = plusBtn
+                })
+                RegisterOpacity(plusLineH, "BackgroundTransparency")
+                
+                local plusLineV = Create("Frame", {
+                    BackgroundColor3 = ThemeColor("TextDim"),
+                    BorderSizePixel = 0,
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    Position = UDim2.new(0.5, 0, 0.5, 0),
+                    Size = UDim2.new(0, math.max(1, math.floor(0.5 * GUI_SCALE)), 0, 3 * GUI_SCALE),
+                    Parent = plusBtn
+                })
+                RegisterOpacity(plusLineV, "BackgroundTransparency")
                 
                 minusBtn.MouseButton1Click:Connect(function() SetVal(val - (max-min)/100) end)
                 plusBtn.MouseButton1Click:Connect(function() SetVal(val + (max-min)/100) end)
                 
-                minusBtn.MouseEnter:Connect(function() minusBtn.TextColor3 = Colors.White end)
-                minusBtn.MouseLeave:Connect(function() minusBtn.TextColor3 = Colors.TextDim end)
-                plusBtn.MouseEnter:Connect(function() plusBtn.TextColor3 = Colors.White end)
-                plusBtn.MouseLeave:Connect(function() plusBtn.TextColor3 = Colors.TextDim end)
+                minusBtn.MouseEnter:Connect(function() minusLine.BackgroundColor3 = Colors.White end)
+                minusBtn.MouseLeave:Connect(function() minusLine.BackgroundColor3 = Colors.TextDim end)
+                plusBtn.MouseEnter:Connect(function() plusLineH.BackgroundColor3 = Colors.White; plusLineV.BackgroundColor3 = Colors.White end)
+                plusBtn.MouseLeave:Connect(function() plusLineH.BackgroundColor3 = Colors.TextDim; plusLineV.BackgroundColor3 = Colors.TextDim end)
 
                 trackOut.InputBegan:Connect(function(i)
                     if i.UserInputType == Enum.UserInputType.MouseButton1 then
