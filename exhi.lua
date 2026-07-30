@@ -648,20 +648,20 @@ function ExhibitionLib:CreateWindow(cfg)
             
             -- Title Break Effect
             local titleBg = Create("Frame", {
-                BackgroundColor3 = ThemeColor("GroupFill"),
+                BackgroundColor3 = ThemeColor("MainFill"), -- Matches the main window background to create a seamless gap
                 BorderSizePixel = 0,
-                Position = UDim2.new(0, 4 * GUI_SCALE, 0, -2 * GUI_SCALE),
-                Size = UDim2.new(0, 50, 0, 4 * GUI_SCALE),
+                Position = UDim2.new(0, 5 * GUI_SCALE, 0, 0),
+                Size = UDim2.new(0, 50, 0, 2), -- 2 pixels tall to exactly cover the BorderOut and BorderIn
                 Parent = secOut
             })
             RegisterOpacity(titleBg, "BackgroundTransparency")
             
-            local secTitle = DrawTextWithShadow(titleBg, secName, Fonts.Bold, 9 * GUI_SCALE, Colors.TextPrimary, UDim2.new(0,0,0,0), Enum.TextXAlignment.Left, 5)
+            local secTitle = DrawTextWithShadow(secOut, secName, Fonts.Regular, 9 * GUI_SCALE, Colors.TextPrimary, UDim2.new(0, 8 * GUI_SCALE, 0, -5 * GUI_SCALE), Enum.TextXAlignment.Left, 5)
             
             -- Size title bg to text bounds
             task.spawn(function()
                 RunService.RenderStepped:Wait()
-                titleBg.Size = UDim2.new(0, secTitle.TextBounds.X + 4, 0, 4 * GUI_SCALE)
+                titleBg.Size = UDim2.new(0, secTitle.TextBounds.X + 6 * GUI_SCALE, 0, 2)
             end)
             
             local secBody = Create("Frame", {
@@ -678,7 +678,7 @@ function ExhibitionLib:CreateWindow(cfg)
             })
             
             local function UpdateSectionHeight()
-                secObj.Height = listLayout.AbsoluteContentSize.Y + 16 * GUI_SCALE
+                secObj.Height = listLayout.AbsoluteContentSize.Y + 22 * GUI_SCALE
                 secOut.Size = UDim2.new(0.333, -6 * GUI_SCALE, 0, secObj.Height)
                 RecalculateCol()
             end
