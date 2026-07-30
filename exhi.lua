@@ -679,8 +679,8 @@ function ExhibitionLib:CreateWindow(cfg)
             
             local secBody = Create("Frame", {
                 BackgroundTransparency = 1,
-                Position = UDim2.new(0, 4 * GUI_SCALE, 0, 10 * GUI_SCALE),
-                Size = UDim2.new(1, -8 * GUI_SCALE, 1, -12 * GUI_SCALE),
+                Position = UDim2.new(0, 4 * GUI_SCALE, 0, 5 * GUI_SCALE),
+                Size = UDim2.new(1, -8 * GUI_SCALE, 1, -7 * GUI_SCALE),
                 Parent = secFill
             })
             
@@ -691,7 +691,7 @@ function ExhibitionLib:CreateWindow(cfg)
             })
             
             local function UpdateSectionHeight()
-                secObj.Height = listLayout.AbsoluteContentSize.Y + 22 * GUI_SCALE
+                secObj.Height = listLayout.AbsoluteContentSize.Y + 17 * GUI_SCALE
                 secOut.Size = UDim2.new(0.333, -6 * GUI_SCALE, 0, secObj.Height)
                 RecalculateCol()
             end
@@ -855,7 +855,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 local trackOut = Create("Frame", {
                     BackgroundColor3 = ThemeColor("GroupBorderOut"),
                     BorderSizePixel = 0,
-                    Position = UDim2.new(0, 12 * GUI_SCALE, 0, 8 * GUI_SCALE),
+                    Position = UDim2.new(0, 12 * GUI_SCALE, 0, 10 * GUI_SCALE),
                     Size = UDim2.new(1, -24 * GUI_SCALE, 0, 4.5 * GUI_SCALE), -- 2.5 * scale
                     Parent = wrap
                 })
@@ -892,7 +892,7 @@ function ExhibitionLib:CreateWindow(cfg)
                         valLbl.Size = UDim2.new(0, 40 * GUI_SCALE, 0, 9 * GUI_SCALE)
                         valLbl.TextXAlignment = Enum.TextXAlignment.Center
                         local p = pct(val)
-                        valLbl.Position = UDim2.new(p, 0, 0, 3 * GUI_SCALE)
+                        valLbl.Position = UDim2.new(p, 0, 0, 5 * GUI_SCALE)
                     else
                         valLbl.Parent = wrap
                         valLbl.AnchorPoint = Vector2.new(1, 0)
@@ -935,7 +935,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local minusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(0, 0, 0, 6 * GUI_SCALE),
+                    Position = UDim2.new(0, 0, 0, 8 * GUI_SCALE),
                     Size = UDim2.new(0, 10 * GUI_SCALE, 0, 10 * GUI_SCALE),
                     Font = Fonts.Regular,
                     Text = "-",
@@ -947,7 +947,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local plusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(1, -10 * GUI_SCALE, 0, 6 * GUI_SCALE),
+                    Position = UDim2.new(1, -10 * GUI_SCALE, 0, 8 * GUI_SCALE),
                     Size = UDim2.new(0, 10 * GUI_SCALE, 0, 10 * GUI_SCALE),
                     Font = Fonts.Regular,
                     Text = "+",
