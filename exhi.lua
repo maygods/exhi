@@ -54,6 +54,8 @@ local GITHUB_ICONS_URL = "https://raw.githubusercontent.com/maygods/exhi/refs/he
 local ExhibitionLib = {
     Instances = {},
     Windows = {},
+    Sliders = {},
+    DynamicSliders = false,
     Icons = {
         Combat = "E", Player = "F", Movement = "J", Visuals = "C",
         Other = "I", Colors = "H", Minigames = "A", Settings = "G"
@@ -63,6 +65,13 @@ local ExhibitionLib = {
 
 local function ThemeColor(key)
     return {__isThemeColor = true, Key = key}
+end
+
+function ExhibitionLib:SetDynamicSliders(state)
+    self.DynamicSliders = state
+    for _, fn in ipairs(self.Sliders) do
+        fn()
+    end
 end
 
 function ExhibitionLib:UpdateColor(key, col)
@@ -808,9 +817,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 })
                 RegisterOpacity(trackOut, "BackgroundTransparency")
                 
-                local valLbl = DrawTextWithShadow(trackOut, tostring(val)..suf, Fonts.Bold, 9 * GUI_SCALE, Colors.TextPrimary, UDim2.new(0, 0, 0, 5 * GUI_SCALE), Enum.TextXAlignment.Center, 2)
-                valLbl.AnchorPoint = Vector2.new(0.5, 0)
-                valLbl.Size = UDim2.new(0, 40 * GUI_SCALE, 0, 9 * GUI_SCALE)
+                local valLbl = DrawTextWithShadow(wrap, tostring(val)..suf, Fonts.Bold, 9 * GUI_SCALE, Colors.TextPrimary, UDim2.new(1, 0, 0, 0), Enum.TextXAlignment.Right, 2)
                 
                 local trackIn = Create("Frame", {
                     BackgroundColor3 = ThemeColor("White"),
@@ -834,6 +841,24 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local function pct(v) return (v - min) / (max - min) end
                 
+                local function UpdateVisuals()
+                    if ExhibitionLib.DynamicSliders then
+                        valLbl.Parent = trackOut
+                        valLbl.AnchorPoint = Vector2.new(0.5, 0)
+                        valLbl.Size = UDim2.new(0, 40 * GUI_SCALE, 0, 9 * GUI_SCALE)
+                        valLbl.TextXAlignment = Enum.TextXAlignment.Center
+                        local p = pct(val)
+                        valLbl.Position = UDim2.new(p, 0, 0, 5 * GUI_SCALE)
+                    else
+                        valLbl.Parent = wrap
+                        valLbl.AnchorPoint = Vector2.new(1, 0)
+                        valLbl.Size = UDim2.new(0, 40 * GUI_SCALE, 0, 9 * GUI_SCALE)
+                        valLbl.TextXAlignment = Enum.TextXAlignment.Right
+                        valLbl.Position = UDim2.new(1, -10 * GUI_SCALE, 0, 0)
+                    end
+                end
+                table.insert(ExhibitionLib.Sliders, UpdateVisuals)
+                
                 local function SetVal(v)
                     val = math.clamp(v, min, max)
                     local p = pct(val)
@@ -852,7 +877,7 @@ function ExhibitionLib:CreateWindow(cfg)
                     end
                     
                     valLbl.Text = tostring(math.floor(val * 10) / 10)..suf
-                    valLbl.Position = UDim2.new(p, 0, 0, 5 * GUI_SCALE)
+                    UpdateVisuals()
                     cb(val)
                 end
                 SetVal(val)
