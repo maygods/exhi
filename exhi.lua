@@ -679,8 +679,8 @@ function ExhibitionLib:CreateWindow(cfg)
             
             local secBody = Create("Frame", {
                 BackgroundTransparency = 1,
-                Position = UDim2.new(0, 4 * GUI_SCALE, 0, 15 * GUI_SCALE),
-                Size = UDim2.new(1, -8 * GUI_SCALE, 1, -17 * GUI_SCALE),
+                Position = UDim2.new(0, 4 * GUI_SCALE, 0, 10 * GUI_SCALE),
+                Size = UDim2.new(1, -8 * GUI_SCALE, 1, -12 * GUI_SCALE),
                 Parent = secFill
             })
             
@@ -691,7 +691,7 @@ function ExhibitionLib:CreateWindow(cfg)
             })
             
             local function UpdateSectionHeight()
-                secObj.Height = listLayout.AbsoluteContentSize.Y + 27 * GUI_SCALE
+                secObj.Height = listLayout.AbsoluteContentSize.Y + 22 * GUI_SCALE
                 secOut.Size = UDim2.new(0.333, -6 * GUI_SCALE, 0, secObj.Height)
                 RecalculateCol()
             end
@@ -787,18 +787,23 @@ function ExhibitionLib:CreateWindow(cfg)
                         bindBtn.TextColor3 = Colors.White
                     end)
                     
-                    UserInputService.InputBegan:Connect(function(input)
-                        if binding and input.UserInputType == Enum.UserInputType.Keyboard then
-                            binding = false
-                            local keyName = input.KeyCode.Name
-                            if keyName == "Escape" or keyName == "Unknown" then
-                                bindKey = "None"
-                            else
-                                bindKey = keyName
+                    UserInputService.InputBegan:Connect(function(input, gpe)
+                        if gpe then return end
+                        if input.UserInputType == Enum.UserInputType.Keyboard then
+                            if binding then
+                                binding = false
+                                local keyName = input.KeyCode.Name
+                                if keyName == "Escape" or keyName == "Unknown" then
+                                    bindKey = "None"
+                                else
+                                    bindKey = keyName
+                                end
+                                bindBtn.Text = "[" .. (bindKey == "None" and "-" or bindKey) .. "]"
+                                bindBtn.TextColor3 = ThemeColor("TextDim")
+                                bindCb(bindKey)
+                            elseif bindKey ~= "None" and input.KeyCode.Name == bindKey then
+                                SetState(not state)
                             end
-                            bindBtn.Text = "[" .. (bindKey == "None" and "-" or bindKey) .. "]"
-                            bindBtn.TextColor3 = ThemeColor("TextDim")
-                            bindCb(bindKey)
                         end
                     end)
                 end
