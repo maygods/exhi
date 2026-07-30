@@ -1517,6 +1517,14 @@ function ExhibitionLib:CreateWindow(cfg)
         return TabAPI
     end
     
+    function WindowAPI:SetVisible(state)
+        sg.Enabled = state
+    end
+    
+    function WindowAPI:GetVisible()
+        return sg.Enabled
+    end
+
     function WindowAPI:Notify(ncfg)
         print("[ExhibitionLib Notify]", ncfg.Title, ncfg.Content)
     end
