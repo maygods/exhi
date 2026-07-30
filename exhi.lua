@@ -588,7 +588,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 UDim2.new(0.333, 3 * GUI_SCALE, 0, 0),
                 UDim2.new(0.666, 6 * GUI_SCALE, 0, 0)
             },
-            ColYs = {0, 0, 0}
+            ColYs = {10 * GUI_SCALE, 10 * GUI_SCALE, 10 * GUI_SCALE}
         }
         
         function TabAPI:CreateSection(scfg)
@@ -887,10 +887,10 @@ function ExhibitionLib:CreateWindow(cfg)
                 minusBtn.MouseButton1Click:Connect(function() SetVal(val - (max-min)/100) end)
                 plusBtn.MouseButton1Click:Connect(function() SetVal(val + (max-min)/100) end)
                 
-                minusBtn.MouseEnter:Connect(function() minusBtn.TextColor3 = ThemeColor("White") end)
-                minusBtn.MouseLeave:Connect(function() minusBtn.TextColor3 = ThemeColor("TextDim") end)
-                plusBtn.MouseEnter:Connect(function() plusBtn.TextColor3 = ThemeColor("White") end)
-                plusBtn.MouseLeave:Connect(function() plusBtn.TextColor3 = ThemeColor("TextDim") end)
+                minusBtn.MouseEnter:Connect(function() minusBtn.TextColor3 = Colors.White end)
+                minusBtn.MouseLeave:Connect(function() minusBtn.TextColor3 = Colors.TextDim end)
+                plusBtn.MouseEnter:Connect(function() plusBtn.TextColor3 = Colors.White end)
+                plusBtn.MouseLeave:Connect(function() plusBtn.TextColor3 = Colors.TextDim end)
 
                 trackOut.InputBegan:Connect(function(i)
                     if i.UserInputType == Enum.UserInputType.MouseButton1 then
