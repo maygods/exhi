@@ -802,7 +802,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local wrap = Create("Frame", {
                     BackgroundTransparency = 1,
-                    Size = UDim2.new(1, 0, 0, 22 * GUI_SCALE),
+                    Size = UDim2.new(1, 0, 0, 16 * GUI_SCALE),
                     Parent = secBody
                 })
                 
@@ -811,7 +811,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 local trackOut = Create("Frame", {
                     BackgroundColor3 = ThemeColor("GroupBorderOut"),
                     BorderSizePixel = 0,
-                    Position = UDim2.new(0, 12 * GUI_SCALE, 0, 10 * GUI_SCALE),
+                    Position = UDim2.new(0, 12 * GUI_SCALE, 0, 8 * GUI_SCALE),
                     Size = UDim2.new(1, -24 * GUI_SCALE, 0, 4.5 * GUI_SCALE), -- 2.5 * scale
                     Parent = wrap
                 })
@@ -848,7 +848,7 @@ function ExhibitionLib:CreateWindow(cfg)
                         valLbl.Size = UDim2.new(0, 40 * GUI_SCALE, 0, 9 * GUI_SCALE)
                         valLbl.TextXAlignment = Enum.TextXAlignment.Center
                         local p = pct(val)
-                        valLbl.Position = UDim2.new(p, 0, 0, 5 * GUI_SCALE)
+                        valLbl.Position = UDim2.new(p, 0, 0, 3 * GUI_SCALE)
                     else
                         valLbl.Parent = wrap
                         valLbl.AnchorPoint = Vector2.new(1, 0)
@@ -891,24 +891,24 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local minusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(0, 0, 0, 8 * GUI_SCALE),
+                    Position = UDim2.new(0, 0, 0, 6 * GUI_SCALE),
                     Size = UDim2.new(0, 10 * GUI_SCALE, 0, 10 * GUI_SCALE),
                     Font = Fonts.Regular,
                     Text = "-",
                     TextColor3 = ThemeColor("TextDim"),
-                    TextSize = 10 * GUI_SCALE,
+                    TextSize = 8 * GUI_SCALE,
                     ZIndex = 2,
                     Parent = wrap
                 })
                 
                 local plusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(1, -10 * GUI_SCALE, 0, 8 * GUI_SCALE),
+                    Position = UDim2.new(1, -10 * GUI_SCALE, 0, 6 * GUI_SCALE),
                     Size = UDim2.new(0, 10 * GUI_SCALE, 0, 10 * GUI_SCALE),
                     Font = Fonts.Regular,
                     Text = "+",
                     TextColor3 = ThemeColor("TextDim"),
-                    TextSize = 10 * GUI_SCALE,
+                    TextSize = 8 * GUI_SCALE,
                     ZIndex = 2,
                     Parent = wrap
                 })
@@ -1084,7 +1084,65 @@ function ExhibitionLib:CreateWindow(cfg)
 
             -- Stubs for the rest to satisfy API requirements
             function SectionAPI:CreateTextbox(ecfg) return {} end
-            function SectionAPI:CreateKeybind(ecfg) return {} end
+            
+            function SectionAPI:CreateKeybind(ecfg)
+                ecfg = ecfg or {}
+                local key = ecfg.Default or "None"
+                local cb = ecfg.Callback or function() end
+                
+                local wrap = Create("Frame", {
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(1, 0, 0, 12 * GUI_SCALE),
+                    Parent = secBody
+                })
+                
+                local nameLbl = DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Keybind"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
+                
+                local bindBtn = Create("TextButton", {
+                    BackgroundTransparency = 1,
+                    Position = UDim2.new(1, -30 * GUI_SCALE, 0, 0),
+                    Size = UDim2.new(0, 30 * GUI_SCALE, 0, 10 * GUI_SCALE),
+                    Font = Fonts.Regular,
+                    Text = "[" .. (key == "None" and "-" or key) .. "]",
+                    TextColor3 = ThemeColor("TextDim"),
+                    TextSize = 9 * GUI_SCALE,
+                    TextXAlignment = Enum.TextXAlignment.Right,
+                    Parent = wrap
+                })
+                
+                local binding = false
+                bindBtn.MouseButton1Click:Connect(function()
+                    binding = true
+                    bindBtn.Text = "[...]"
+                    bindBtn.TextColor3 = Colors.White
+                end)
+                
+                UserInputService.InputBegan:Connect(function(input)
+                    if binding and input.UserInputType == Enum.UserInputType.Keyboard then
+                        binding = false
+                        local keyName = input.KeyCode.Name
+                        if keyName == "Escape" or keyName == "Unknown" then
+                            key = "None"
+                        else
+                            key = keyName
+                        end
+                        bindBtn.Text = "[" .. (key == "None" and "-" or key) .. "]"
+                        bindBtn.TextColor3 = ThemeColor("TextDim")
+                        cb(key)
+                    end
+                end)
+                
+                RecalculateCol()
+                return {
+                    Set = function(k)
+                        key = k
+                        bindBtn.Text = "[" .. (key == "None" and "-" or key) .. "]"
+                        cb(key)
+                    end,
+                    Get = function() return key end
+                }
+            end
+            
             function SectionAPI:CreateButton(ecfg) return {} end
             function SectionAPI:CreateColorPicker(ecfg)
                 ecfg = ecfg or {}
