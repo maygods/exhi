@@ -233,14 +233,14 @@ function ExhibitionLib:CreateWindow(cfg)
     local windowGlow = Create("ImageLabel", {
         Name = "Glow",
         BackgroundTransparency = 1,
-        Image = "rbxassetid://5028857084",
+        Image = "rbxassetid://13169262844",
         ImageColor3 = ThemeColor("MainFill"),
-        ImageTransparency = 0.3,
+        ImageTransparency = 0.4,
         ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(24, 24, 276, 276),
-        SliceScale = GUI_SCALE,
-        Position = UDim2.new(0, -24 * GUI_SCALE, 0, -24 * GUI_SCALE),
-        Size = UDim2.new(1, 48 * GUI_SCALE, 1, 48 * GUI_SCALE),
+        SliceCenter = Rect.new(128, 128, 128, 128),
+        SliceScale = (30 / 128) * GUI_SCALE,
+        Position = UDim2.new(0, -30 * GUI_SCALE, 0, -30 * GUI_SCALE),
+        Size = UDim2.new(1, 60 * GUI_SCALE, 1, 60 * GUI_SCALE),
         ZIndex = 0,
         Parent = window
     })
@@ -990,7 +990,7 @@ function ExhibitionLib:CreateWindow(cfg)
                         valLbl.AnchorPoint = Vector2.new(1, 0)
                         valLbl.Size = UDim2.new(0, 40 * GUI_SCALE, 0, 9 * GUI_SCALE)
                         valLbl.TextXAlignment = Enum.TextXAlignment.Right
-                        valLbl.Position = UDim2.new(1, -10 * GUI_SCALE, 0, 0)
+                        valLbl.Position = UDim2.new(1, 0, 0, 0)
                     end
                 end
                 table.insert(ExhibitionLib.Sliders, UpdateVisuals)
