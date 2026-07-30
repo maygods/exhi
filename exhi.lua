@@ -799,7 +799,7 @@ function ExhibitionLib:CreateWindow(cfg)
                                     bindKey = keyName
                                 end
                                 bindBtn.Text = "[" .. (bindKey == "None" and "-" or bindKey) .. "]"
-                                bindBtn.TextColor3 = ThemeColor("TextDim")
+                                bindBtn.TextColor3 = Colors.TextDim
                                 bindCb(bindKey)
                             elseif bindKey ~= "None" and input.KeyCode.Name == bindKey then
                                 SetState(not state)
@@ -1171,7 +1171,7 @@ function ExhibitionLib:CreateWindow(cfg)
                             key = keyName
                         end
                         bindBtn.Text = "[" .. (key == "None" and "-" or key) .. "]"
-                        bindBtn.TextColor3 = ThemeColor("TextDim")
+                        bindBtn.TextColor3 = Colors.TextDim
                         cb(key)
                     end
                 end)
