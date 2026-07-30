@@ -708,7 +708,14 @@ function ExhibitionLib:CreateWindow(cfg)
                 if not halfSize then
                     wrap.Parent = secBody
                 else
-                    local last = secBody:GetChildren()[#secBody:GetChildren()]
+                    local children = secBody:GetChildren()
+                    local last
+                    for i = #children, 1, -1 do
+                        if children[i]:IsA("GuiObject") then
+                            last = children[i]
+                            break
+                        end
+                    end
                     local container
                     if last and last.Name == "HalfRow" and #last:GetChildren() == 1 then
                         container = last
