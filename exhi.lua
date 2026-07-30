@@ -384,6 +384,16 @@ function ExhibitionLib:CreateWindow(cfg)
     })
     RegisterOpacity(sidebar, "BackgroundTransparency", 0, true)
     
+    local sidebarRightBorder = Create("Frame", {
+        BackgroundColor3 = ThemeColor("GroupBorderIn"),
+        BorderSizePixel = 0,
+        Position = UDim2.new(1, -1, 0, 0),
+        Size = UDim2.new(0, 1, 1, 0),
+        ZIndex = 1,
+        Parent = sidebar
+    })
+    RegisterOpacity(sidebarRightBorder, "BackgroundTransparency", 0, true)
+
     local sidebarActiveBG = Create("Frame", {
         BackgroundColor3 = ThemeColor("MainFill"),
         BorderSizePixel = 0,
@@ -392,8 +402,8 @@ function ExhibitionLib:CreateWindow(cfg)
         ZIndex = 2,
         Parent = sidebar
     })
-    local activeTop = Create("Frame", { BackgroundColor3 = ThemeColor("Border1"), BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1), ZIndex = 3, Parent = sidebarActiveBG })
-    local activeBot = Create("Frame", { BackgroundColor3 = ThemeColor("Border1"), BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -1), Size = UDim2.new(1, 0, 0, 1), ZIndex = 3, Parent = sidebarActiveBG })
+    local activeTop = Create("Frame", { BackgroundColor3 = ThemeColor("GroupBorderIn"), BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1), ZIndex = 3, Parent = sidebarActiveBG })
+    local activeBot = Create("Frame", { BackgroundColor3 = ThemeColor("GroupBorderIn"), BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -1), Size = UDim2.new(1, 0, 0, 1), ZIndex = 3, Parent = sidebarActiveBG })
     RegisterOpacity(sidebarActiveBG, "BackgroundTransparency", 0, true)
     RegisterOpacity(activeTop, "BackgroundTransparency", 0, true)
     RegisterOpacity(activeBot, "BackgroundTransparency", 0, true)
