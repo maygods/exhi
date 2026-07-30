@@ -620,7 +620,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 local cy = 0
                 for _, s in ipairs(self.Columns[col]) do
                     s.Out.Position = UDim2.new(self.ColXs[col].X.Scale, self.ColXs[col].X.Offset, 0, cy)
-                    cy = cy + s.Height + 10 * GUI_SCALE
+                    cy = cy + s.Height + 6 * GUI_SCALE
                 end
                 self.ColYs[col] = cy
             end
@@ -798,8 +798,8 @@ function ExhibitionLib:CreateWindow(cfg)
                 local trackOut = Create("Frame", {
                     BackgroundColor3 = ThemeColor("GroupBorderOut"),
                     BorderSizePixel = 0,
-                    Position = UDim2.new(0, 0, 0, 10 * GUI_SCALE),
-                    Size = UDim2.new(1, 0, 0, 4.5 * GUI_SCALE), -- 2.5 * scale
+                    Position = UDim2.new(0, 12 * GUI_SCALE, 0, 10 * GUI_SCALE),
+                    Size = UDim2.new(1, -24 * GUI_SCALE, 0, 4.5 * GUI_SCALE), -- 2.5 * scale
                     Parent = wrap
                 })
                 RegisterOpacity(trackOut, "BackgroundTransparency")
@@ -809,7 +809,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 valLbl.Size = UDim2.new(0, 40 * GUI_SCALE, 0, 9 * GUI_SCALE)
                 
                 local trackIn = Create("Frame", {
-                    BackgroundColor3 = ThemeColor("Black"),
+                    BackgroundColor3 = ThemeColor("White"),
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 1, 0, 1),
                     Size = UDim2.new(1, -2, 1, -2),
@@ -862,7 +862,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local minusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(0, -10 * GUI_SCALE, 0, 8 * GUI_SCALE),
+                    Position = UDim2.new(0, 0, 0, 8 * GUI_SCALE),
                     Size = UDim2.new(0, 10 * GUI_SCALE, 0, 10 * GUI_SCALE),
                     Font = Fonts.Regular,
                     Text = "-",
@@ -874,7 +874,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local plusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(1, 0, 0, 8 * GUI_SCALE),
+                    Position = UDim2.new(1, -10 * GUI_SCALE, 0, 8 * GUI_SCALE),
                     Size = UDim2.new(0, 10 * GUI_SCALE, 0, 10 * GUI_SCALE),
                     Font = Fonts.Regular,
                     Text = "+",
@@ -940,7 +940,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 RegisterOpacity(boxOut, "BackgroundTransparency")
                 
                 local boxIn = Create("TextButton", {
-                    BackgroundColor3 = ThemeColor("GroupFill"), -- Grey fill
+                    BackgroundColor3 = ThemeColor("White"), -- Need White for Gradient
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 1, 0, 1),
                     Size = UDim2.new(1, -2, 1, -2),
@@ -960,9 +960,9 @@ function ExhibitionLib:CreateWindow(cfg)
                     Position = UDim2.new(1, -12 * GUI_SCALE, 0, 0),
                     Size = UDim2.new(0, 10 * GUI_SCALE, 1, 0),
                     Font = Fonts.Regular,
-                    Text = "▼",
+                    Text = "+",
                     TextColor3 = ThemeColor("TextMuted"),
-                    TextSize = 6 * GUI_SCALE,
+                    TextSize = 10 * GUI_SCALE,
                     ZIndex = 2,
                     Parent = boxIn
                 })
@@ -985,7 +985,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 RegisterOpacity(dropList, "BackgroundTransparency")
                 
                 local dropListIn = Create("Frame", {
-                    BackgroundColor3 = ThemeColor("GroupFill"),
+                    BackgroundColor3 = ThemeColor("White"),
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 1, 0, 1),
                     Size = UDim2.new(1, -2, 1, -2),
@@ -1024,7 +1024,7 @@ function ExhibitionLib:CreateWindow(cfg)
                             cb(selected)
                             open = false
                             dropList.Visible = false
-                            arrow.Text = "▼"
+                            arrow.Text = "+"
                             UpdateOptions()
                         end)
                     end
@@ -1037,7 +1037,7 @@ function ExhibitionLib:CreateWindow(cfg)
                         UpdateOptions()
                     end
                     dropList.Visible = open
-                    arrow.Text = open and "▲" or "▼"
+                    arrow.Text = open and "-" or "+"
                 end)
                 
                 UpdateOptions()
