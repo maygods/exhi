@@ -623,7 +623,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 local cy = 0
                 for _, s in ipairs(self.Columns[col]) do
                     s.Out.Position = UDim2.new(self.ColXs[col].X.Scale, self.ColXs[col].X.Offset, 0, cy)
-                    cy = cy + s.Height + 6 * GUI_SCALE
+                    cy = cy + s.Height + 10 * GUI_SCALE
                 end
                 self.ColYs[col] = cy
             end
@@ -649,23 +649,19 @@ function ExhibitionLib:CreateWindow(cfg)
             })
             RegisterOpacity(secFill, "BackgroundTransparency")
             
+            local textWidth = TextService:GetTextSize(secName, 9 * GUI_SCALE, Fonts.Regular, Vector2.new(math.huge, math.huge)).X
+            
             -- Title Break Effect
             local titleBg = Create("Frame", {
                 BackgroundColor3 = ThemeColor("MainFill"), -- Matches the main window background to create a seamless gap
                 BorderSizePixel = 0,
                 Position = UDim2.new(0, 5 * GUI_SCALE, 0, 0),
-                Size = UDim2.new(0, 50, 0, 2), -- 2 pixels tall to exactly cover the BorderOut and BorderIn
+                Size = UDim2.new(0, textWidth + 4 * GUI_SCALE, 0, 2), -- 2 pixels tall to exactly cover the BorderOut and BorderIn
                 Parent = secOut
             })
             RegisterOpacity(titleBg, "BackgroundTransparency")
             
-            local secTitle = DrawTextWithShadow(secOut, secName, Fonts.Regular, 9 * GUI_SCALE, Colors.TextPrimary, UDim2.new(0, 8 * GUI_SCALE, 0, -5 * GUI_SCALE), Enum.TextXAlignment.Left, 5)
-            
-            -- Size title bg to text bounds
-            task.spawn(function()
-                RunService.RenderStepped:Wait()
-                titleBg.Size = UDim2.new(0, secTitle.TextBounds.X + 6 * GUI_SCALE, 0, 2)
-            end)
+            local secTitle = DrawTextWithShadow(secOut, secName, Fonts.Regular, 9 * GUI_SCALE, Colors.TextPrimary, UDim2.new(0, 7 * GUI_SCALE, 0, -5 * GUI_SCALE), Enum.TextXAlignment.Left, 5)
             
             local secBody = Create("Frame", {
                 BackgroundTransparency = 1,
@@ -960,15 +956,14 @@ function ExhibitionLib:CreateWindow(cfg)
                 -- Skeet tiny triangle
                 local arrow = Create("Frame", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(1, -9 * GUI_SCALE, 0.5, 0),
-                    Size = UDim2.new(0, 5 * GUI_SCALE, 0, 3 * GUI_SCALE),
+                    Position = UDim2.new(1, -8 * GUI_SCALE, 0.5, 0),
+                    Size = UDim2.new(0, 3 * GUI_SCALE, 0, 2 * GUI_SCALE),
                     AnchorPoint = Vector2.new(0.5, 0.5),
                     ZIndex = 2,
                     Parent = boxIn
                 })
                 Create("Frame", { BackgroundColor3 = ThemeColor("TextMuted"), BorderSizePixel = 0, Position = UDim2.new(0, 0, 0, 0), Size = UDim2.new(1, 0, 0, 1 * GUI_SCALE), ZIndex = 2, Parent = arrow })
                 Create("Frame", { BackgroundColor3 = ThemeColor("TextMuted"), BorderSizePixel = 0, Position = UDim2.new(0, 1 * GUI_SCALE, 0, 1 * GUI_SCALE), Size = UDim2.new(1, -2 * GUI_SCALE, 0, 1 * GUI_SCALE), ZIndex = 2, Parent = arrow })
-                Create("Frame", { BackgroundColor3 = ThemeColor("TextMuted"), BorderSizePixel = 0, Position = UDim2.new(0, 2 * GUI_SCALE, 0, 2 * GUI_SCALE), Size = UDim2.new(1, -4 * GUI_SCALE, 0, 1 * GUI_SCALE), ZIndex = 2, Parent = arrow })
                 
                 local dropList = Create("Frame", {
                     BackgroundColor3 = ThemeColor("Border1"),
