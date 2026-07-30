@@ -703,22 +703,17 @@ function ExhibitionLib:CreateWindow(cfg)
             
             listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(UpdateSectionHeight)
             
+            local lastHalfRow = nil
+            
             local function MountComponent(wrap, halfSize)
                 local reqHeight = wrap.Size.Y.Offset
                 if not halfSize then
                     wrap.Parent = secBody
+                    lastHalfRow = nil
                 else
-                    local children = secBody:GetChildren()
-                    local last
-                    for i = #children, 1, -1 do
-                        if children[i]:IsA("GuiObject") and children[i] ~= wrap then
-                            last = children[i]
-                            break
-                        end
-                    end
                     local container
-                    if last and last.Name == "HalfRow" and #last:GetChildren() == 1 then
-                        container = last
+                    if lastHalfRow and #lastHalfRow:GetChildren() == 1 then
+                        container = lastHalfRow
                         if reqHeight > container.Size.Y.Offset then
                             container.Size = UDim2.new(1, 0, 0, reqHeight)
                         end
@@ -729,6 +724,7 @@ function ExhibitionLib:CreateWindow(cfg)
                             Size = UDim2.new(1, 0, 0, reqHeight),
                             Parent = secBody
                         })
+                        lastHalfRow = container
                     end
                     local count = #container:GetChildren()
                     wrap.Size = UDim2.new(0.5, -2 * GUI_SCALE, 0, reqHeight)
