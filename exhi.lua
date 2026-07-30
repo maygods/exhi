@@ -909,8 +909,8 @@ function ExhibitionLib:CreateWindow(cfg)
                 local trackOut = Create("Frame", {
                     BackgroundColor3 = ThemeColor("GroupBorderOut"),
                     BorderSizePixel = 0,
-                    Position = UDim2.new(0, 12 * GUI_SCALE, 0, 10 * GUI_SCALE),
-                    Size = UDim2.new(1, -24 * GUI_SCALE, 0, 4.5 * GUI_SCALE), -- 2.5 * scale
+                    Position = UDim2.new(0, 8 * GUI_SCALE, 0, 10 * GUI_SCALE),
+                    Size = UDim2.new(1, -16 * GUI_SCALE, 0, 4.5 * GUI_SCALE), -- 2.5 * scale
                     Parent = wrap
                 })
                 RegisterOpacity(trackOut, "BackgroundTransparency")
@@ -990,7 +990,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 local minusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
                     Position = UDim2.new(0, 0, 0, 8 * GUI_SCALE),
-                    Size = UDim2.new(0, 10 * GUI_SCALE, 0, 10 * GUI_SCALE),
+                    Size = UDim2.new(0, 6 * GUI_SCALE, 0, 10 * GUI_SCALE),
                     Font = Fonts.Regular,
                     Text = "-",
                     TextColor3 = ThemeColor("TextDim"),
@@ -1001,8 +1001,8 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local plusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(1, -10 * GUI_SCALE, 0, 8 * GUI_SCALE),
-                    Size = UDim2.new(0, 10 * GUI_SCALE, 0, 10 * GUI_SCALE),
+                    Position = UDim2.new(1, -6 * GUI_SCALE, 0, 8 * GUI_SCALE),
+                    Size = UDim2.new(0, 6 * GUI_SCALE, 0, 10 * GUI_SCALE),
                     Font = Fonts.Regular,
                     Text = "+",
                     TextColor3 = ThemeColor("TextDim"),
