@@ -906,11 +906,14 @@ function ExhibitionLib:CreateWindow(cfg)
                 nameLbl.Size = UDim2.new(1, -15 * GUI_SCALE, 0, 9 * GUI_SCALE)
                 nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
                 
+                local trackHeight = math.floor(4.5 * GUI_SCALE)
+                local trackCenterY = math.floor(trackHeight / 2)
+
                 local trackOut = Create("Frame", {
                     BackgroundColor3 = ThemeColor("GroupBorderOut"),
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 4 * GUI_SCALE, 0, 10 * GUI_SCALE),
-                    Size = UDim2.new(1, -8 * GUI_SCALE, 0, 4.5 * GUI_SCALE),
+                    Size = UDim2.new(1, -8 * GUI_SCALE, 0, trackHeight),
                     Parent = wrap
                 })
                 RegisterOpacity(trackOut, "BackgroundTransparency")
@@ -989,8 +992,8 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local minusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(0, 0, 0, 8 * GUI_SCALE),
-                    Size = UDim2.new(0, 3 * GUI_SCALE, 0, 10 * GUI_SCALE),
+                    Position = UDim2.new(0, 0, 0, 10 * GUI_SCALE),
+                    Size = UDim2.new(0, 3 * GUI_SCALE, 0, trackHeight),
                     Text = "",
                     ZIndex = 2,
                     Parent = wrap
@@ -1003,7 +1006,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 local minusLine = Create("Frame", {
                     BackgroundColor3 = ThemeColor("TextDim"),
                     BorderSizePixel = 0,
-                    Position = UDim2.new(0.5, -cOff, 0.5, 0),
+                    Position = UDim2.new(0, 0, 0, trackCenterY),
                     Size = UDim2.new(0, cSize, 0, 1),
                     Parent = minusBtn
                 })
@@ -1011,8 +1014,8 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local plusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(1, -3 * GUI_SCALE, 0, 8 * GUI_SCALE),
-                    Size = UDim2.new(0, 3 * GUI_SCALE, 0, 10 * GUI_SCALE),
+                    Position = UDim2.new(1, -3 * GUI_SCALE, 0, 10 * GUI_SCALE),
+                    Size = UDim2.new(0, 3 * GUI_SCALE, 0, trackHeight),
                     Text = "",
                     ZIndex = 2,
                     Parent = wrap
@@ -1021,7 +1024,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 local plusLineH = Create("Frame", {
                     BackgroundColor3 = ThemeColor("TextDim"),
                     BorderSizePixel = 0,
-                    Position = UDim2.new(0.5, -cOff, 0.5, 0),
+                    Position = UDim2.new(1, -cSize, 0, trackCenterY),
                     Size = UDim2.new(0, cSize, 0, 1),
                     Parent = plusBtn
                 })
@@ -1030,7 +1033,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 local plusLineV = Create("Frame", {
                     BackgroundColor3 = ThemeColor("TextDim"),
                     BorderSizePixel = 0,
-                    Position = UDim2.new(0.5, 0, 0.5, -cOff),
+                    Position = UDim2.new(1, -cSize + cOff, 0, trackCenterY - cOff),
                     Size = UDim2.new(0, 1, 0, cSize),
                     Parent = plusBtn
                 })
