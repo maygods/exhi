@@ -133,6 +133,28 @@ local function Lerp(a, b, t)
     return a + (b - a) * t
 end
 
+local function ApplyMarquee(label, container, startOffset)
+    local activeTween = nil
+    local function updateMarquee()
+        if activeTween then activeTween:Cancel() activeTween = nil end
+        label.Position = UDim2.new(0, startOffset, 0, 0)
+        local maxW = container.AbsoluteSize.X
+        local txtW = label.TextBounds.X
+        
+        if txtW > 0 and maxW > 0 and txtW > maxW - startOffset then
+            local dist = (txtW - maxW) + (startOffset * 2) + (10 * GUI_SCALE)
+            local speed = 30 * GUI_SCALE
+            local time = dist / speed
+            local tinfo = TweenInfo.new(time, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1, true, 1)
+            activeTween = TweenService:Create(label, tinfo, {Position = UDim2.new(0, startOffset - dist, 0, 0)})
+            activeTween:Play()
+        end
+    end
+    label:GetPropertyChangedSignal("TextBounds"):Connect(updateMarquee)
+    container:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateMarquee)
+    task.delay(0.1, updateMarquee)
+end
+
 -- Global Opacity (0 to 1)
 local GlobalOpacity = { Value = 0, Target = 0, Speed = 25 }
 
@@ -1181,6 +1203,7 @@ function ExhibitionLib:CreateWindow(cfg)
                     Position = UDim2.new(0, 1, 0, 1),
                     Size = UDim2.new(1, -2, 1, -2),
                     Text = "",
+                    ClipsDescendants = true,
                     Parent = boxOut
                 })
                 RegisterOpacity(boxIn, "BackgroundTransparency")
@@ -1188,7 +1211,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local selText = DrawTextWithShadow(boxIn, selected, Fonts.Regular, 9 * GUI_SCALE, Colors.TextMuted, UDim2.new(0, 2 * GUI_SCALE, 0, 0), Enum.TextXAlignment.Left, 2)
                 selText.Size = UDim2.new(1, -10 * GUI_SCALE, 1, 0)
-                selText.ClipsDescendants = true
+                ApplyMarquee(selText, boxIn, 2 * GUI_SCALE)
                 
                 -- Skeet tiny triangle
                 local arrow = Create("Frame", {
@@ -1498,7 +1521,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 local btnOut = Create("TextButton", {
                     BackgroundColor3 = ThemeColor("GroupBorderOut"),
                     BorderSizePixel = 0,
-                    Position = UDim2.new(1, -20 * GUI_SCALE, 0.5, -4 * GUI_SCALE),
+                    Position = UDim2.new(1, -20 * GUI_SCALE, 0, 0.5 * GUI_SCALE),
                     Size = UDim2.new(0, 15 * GUI_SCALE, 0, 8 * GUI_SCALE),
                     Text = "",
                     Parent = wrap
