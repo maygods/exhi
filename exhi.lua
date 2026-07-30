@@ -593,12 +593,9 @@ function ExhibitionLib:CreateWindow(cfg)
         if tabIndex == 1 then SelectTab() end
         
         -- Tab API
-        local ExhibitionLib = {
-            Tabs = {},
-            Sliders = {},
-            OpacityMultiplier = 1,
-            Flags = {}
-        }
+        ExhibitionLib.Tabs = {}
+        ExhibitionLib.Flags = ExhibitionLib.Flags or {}
+        ExhibitionLib.OpacityMultiplier = 1
         
         local TabAPI = {
             Sections = {},
@@ -904,6 +901,8 @@ function ExhibitionLib:CreateWindow(cfg)
                 MountComponent(wrap, ecfg.HalfSize)
                 
                 local nameLbl = DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Slider"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
+                nameLbl.Size = UDim2.new(1, -42 * GUI_SCALE, 0, 9 * GUI_SCALE)
+                nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
                 
                 local trackOut = Create("Frame", {
                     BackgroundColor3 = ThemeColor("GroupBorderOut"),
@@ -1201,6 +1200,8 @@ function ExhibitionLib:CreateWindow(cfg)
                 })
                 
                 local nameLbl = DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Keybind"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
+                nameLbl.Size = UDim2.new(1, -32 * GUI_SCALE, 0, 9 * GUI_SCALE)
+                nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
                 
                 local bindBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
