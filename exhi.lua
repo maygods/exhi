@@ -795,8 +795,8 @@ function ExhibitionLib:CreateWindow(cfg)
                     
                     UserInputService.InputBegan:Connect(function(input, gpe)
                         if gpe then return end
-                        if input.UserInputType == Enum.UserInputType.Keyboard then
-                            if binding then
+                        if binding then
+                            if input.UserInputType == Enum.UserInputType.Keyboard then
                                 binding = false
                                 local keyName = input.KeyCode.Name
                                 if keyName == "Escape" or keyName == "Unknown" then
@@ -807,7 +807,15 @@ function ExhibitionLib:CreateWindow(cfg)
                                 bindBtn.Text = "[" .. (bindKey == "None" and "-" or bindKey) .. "]"
                                 bindBtn.TextColor3 = Colors.TextDim
                                 bindCb(bindKey)
-                            elseif bindKey ~= "None" and input.KeyCode.Name == bindKey then
+                            elseif input.UserInputType.Name:find("MouseButton") then
+                                binding = false
+                                bindKey = "None"
+                                bindBtn.Text = "[-]"
+                                bindBtn.TextColor3 = Colors.TextDim
+                                bindCb(bindKey)
+                            end
+                        elseif input.UserInputType == Enum.UserInputType.Keyboard then
+                            if bindKey ~= "None" and input.KeyCode.Name == bindKey then
                                 SetState(not state)
                             end
                         end
@@ -1167,18 +1175,27 @@ function ExhibitionLib:CreateWindow(cfg)
                     bindBtn.TextColor3 = Colors.White
                 end)
                 
-                UserInputService.InputBegan:Connect(function(input)
-                    if binding and input.UserInputType == Enum.UserInputType.Keyboard then
-                        binding = false
-                        local keyName = input.KeyCode.Name
-                        if keyName == "Escape" or keyName == "Unknown" then
+                UserInputService.InputBegan:Connect(function(input, gpe)
+                    if gpe then return end
+                    if binding then
+                        if input.UserInputType == Enum.UserInputType.Keyboard then
+                            binding = false
+                            local keyName = input.KeyCode.Name
+                            if keyName == "Escape" or keyName == "Unknown" then
+                                key = "None"
+                            else
+                                key = keyName
+                            end
+                            bindBtn.Text = "[" .. (key == "None" and "-" or key) .. "]"
+                            bindBtn.TextColor3 = Colors.TextDim
+                            cb(key)
+                        elseif input.UserInputType.Name:find("MouseButton") then
+                            binding = false
                             key = "None"
-                        else
-                            key = keyName
+                            bindBtn.Text = "[-]"
+                            bindBtn.TextColor3 = Colors.TextDim
+                            cb(key)
                         end
-                        bindBtn.Text = "[" .. (key == "None" and "-" or key) .. "]"
-                        bindBtn.TextColor3 = Colors.TextDim
-                        cb(key)
                     end
                 end)
                 
@@ -1193,7 +1210,53 @@ function ExhibitionLib:CreateWindow(cfg)
                 }
             end
             
-            function SectionAPI:CreateButton(ecfg) return {} end
+            function SectionAPI:CreateButton(ecfg)
+                ecfg = ecfg or {}
+                local cb = ecfg.Callback or function() end
+                
+                local wrap = Create("Frame", {
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(1, 0, 0, 16 * GUI_SCALE),
+                    Parent = secBody
+                })
+                
+                local btn = Create("TextButton", {
+                    BackgroundColor3 = ThemeColor("GroupBorderOut"),
+                    BorderSizePixel = 0,
+                    Position = UDim2.new(0, 10 * GUI_SCALE, 0, 2 * GUI_SCALE),
+                    Size = UDim2.new(1, -20 * GUI_SCALE, 1, -4 * GUI_SCALE),
+                    Font = Fonts.Regular,
+                    Text = "",
+                    Parent = wrap
+                })
+                RegisterOpacity(btn, "BackgroundTransparency")
+                CreateUIGradient(btn, "ElemGradTop", "ElemGradBot")
+                
+                local btnIn = Create("Frame", {
+                    BackgroundColor3 = ThemeColor("GroupBorderIn"),
+                    BorderSizePixel = 0,
+                    Position = UDim2.new(0, 1, 0, 1),
+                    Size = UDim2.new(1, -2, 1, -2),
+                    Parent = btn
+                })
+                RegisterOpacity(btnIn, "BackgroundTransparency")
+                
+                local btnFill = Create("Frame", {
+                    BackgroundColor3 = ThemeColor("GroupFill"),
+                    BorderSizePixel = 0,
+                    Position = UDim2.new(0, 1, 0, 1),
+                    Size = UDim2.new(1, -2, 1, -2),
+                    Parent = btnIn
+                })
+                RegisterOpacity(btnFill, "BackgroundTransparency")
+                
+                local lbl = DrawTextWithShadow(btnFill, Capitalize(ecfg.Name or "Button"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextPrimary, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Center, 2)
+                lbl.Size = UDim2.new(1, 0, 1, 0)
+                
+                btn.MouseButton1Click:Connect(cb)
+                
+                return {}
+            end
             function SectionAPI:CreateColorPicker(ecfg)
                 ecfg = ecfg or {}
                 local color = ecfg.Default or Color3.new(1,0,0)
