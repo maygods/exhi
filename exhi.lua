@@ -993,14 +993,19 @@ function ExhibitionLib:CreateWindow(cfg)
                 local cSize = math.floor(1.5 * GUI_SCALE)
                 if cSize % 2 == 0 then cSize = cSize + 1 end
                 local cOff = math.floor(cSize / 2)
-                local edgeOffset = 4 * GUI_SCALE -- Section padding
-                local gap = 1 -- Tiny 1px visual gap between buttons and track
+                
+                local edgeOffset = 4 * GUI_SCALE
+                local leftExtend = not ecfg.HalfSize or (wrap.Position.X.Scale == 0)
+                local rightExtend = not ecfg.HalfSize or (wrap.Position.X.Scale > 0)
+                
+                local minusX = leftExtend and -edgeOffset or 0
+                local plusXOffset = rightExtend and edgeOffset or 0
 
                 local trackOut = Create("Frame", {
                     BackgroundColor3 = ThemeColor("GroupBorderOut"),
                     BorderSizePixel = 0,
-                    Position = UDim2.new(0, cSize - edgeOffset + gap, 0, 12 * GUI_SCALE),
-                    Size = UDim2.new(1, (edgeOffset * 2) - (cSize * 2) - (gap * 2), 0, trackHeight),
+                    Position = UDim2.new(0, minusX + cSize, 0, 12 * GUI_SCALE),
+                    Size = UDim2.new(1, plusXOffset - minusX - (cSize * 2), 0, trackHeight),
                     Parent = wrap
                 })
                 RegisterOpacity(trackOut, "BackgroundTransparency")
@@ -1069,7 +1074,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local minusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(0, -edgeOffset, 0, 12 * GUI_SCALE + trackCenterY - cOff),
+                    Position = UDim2.new(0, minusX, 0, 12 * GUI_SCALE + trackCenterY - cOff),
                     Size = UDim2.new(0, cSize, 0, cSize),
                     Text = "",
                     ZIndex = 2,
@@ -1087,7 +1092,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local plusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(1, edgeOffset - cSize, 0, 12 * GUI_SCALE + trackCenterY - cOff),
+                    Position = UDim2.new(1, plusXOffset - cSize, 0, 12 * GUI_SCALE + trackCenterY - cOff),
                     Size = UDim2.new(0, cSize, 0, cSize),
                     Text = "",
                     ZIndex = 2,
