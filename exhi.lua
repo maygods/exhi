@@ -227,10 +227,12 @@ function ExhibitionLib:CreateWindow(cfg)
     })
     
     -- Nested Borders (Grey -> Black -> Grey -> DarkGrey -> Grey -> Fill)
-    local b1 = DrawBorder(window, {Colors.Border1})
-    local b2 = DrawBorder(b1, {Colors.Border2})
-    local b3 = DrawBorder(b2, {Colors.Border3})
-    local innerBorder = DrawBorder(b3, {Colors.Border2})
+    local innerBorder = DrawBorder(window, {
+        ThemeColor("Border1"), 
+        ThemeColor("Border2"), 
+        ThemeColor("Border3"), 
+        ThemeColor("Border2")
+    })
     
     -- Main Fill
     local main = Create("Frame", {
@@ -375,6 +377,7 @@ function ExhibitionLib:CreateWindow(cfg)
     local sidebarActiveBG = Create("Frame", {
         BackgroundColor3 = ThemeColor("MainFill"),
         BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 0, 15 * GUI_SCALE),
         Size = UDim2.new(1, 0, 0, 40 * GUI_SCALE),
         ZIndex = 2,
         Parent = sidebar
@@ -473,7 +476,7 @@ function ExhibitionLib:CreateWindow(cfg)
         
         local tabBtn = Create("TextButton", {
             BackgroundTransparency = 1,
-            Position = UDim2.new(0, 0, 0, (tabIndex - 1) * 40 * GUI_SCALE),
+            Position = UDim2.new(0, 0, 0, (15 * GUI_SCALE) + (tabIndex - 1) * 40 * GUI_SCALE),
             Size = UDim2.new(1, 0, 0, 40 * GUI_SCALE),
             Text = "",
             LayoutOrder = tabIndex,
@@ -551,7 +554,7 @@ function ExhibitionLib:CreateWindow(cfg)
             self.ActiveTab.Content.Visible = true
             
             -- Move active indicator
-            local targetY = (tabIndex - 1) * 40 * GUI_SCALE
+            local targetY = (15 * GUI_SCALE) + (tabIndex - 1) * 40 * GUI_SCALE
             TweenService:Create(sidebarActiveBG, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, targetY)}):Play()
         end
         
@@ -954,18 +957,18 @@ function ExhibitionLib:CreateWindow(cfg)
                 selText.Size = UDim2.new(1, -10 * GUI_SCALE, 1, 0)
                 selText.ClipsDescendants = true
                 
-                -- Text chevron
-                local arrow = Create("TextLabel", {
+                -- Skeet tiny triangle
+                local arrow = Create("Frame", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(1, -12 * GUI_SCALE, 0, 0),
-                    Size = UDim2.new(0, 10 * GUI_SCALE, 1, 0),
-                    Font = Fonts.Regular,
-                    Text = "+",
-                    TextColor3 = ThemeColor("TextMuted"),
-                    TextSize = 10 * GUI_SCALE,
+                    Position = UDim2.new(1, -9 * GUI_SCALE, 0.5, 0),
+                    Size = UDim2.new(0, 5 * GUI_SCALE, 0, 3 * GUI_SCALE),
+                    AnchorPoint = Vector2.new(0.5, 0.5),
                     ZIndex = 2,
                     Parent = boxIn
                 })
+                Create("Frame", { BackgroundColor3 = ThemeColor("TextMuted"), BorderSizePixel = 0, Position = UDim2.new(0, 0, 0, 0), Size = UDim2.new(1, 0, 0, 1 * GUI_SCALE), ZIndex = 2, Parent = arrow })
+                Create("Frame", { BackgroundColor3 = ThemeColor("TextMuted"), BorderSizePixel = 0, Position = UDim2.new(0, 1 * GUI_SCALE, 0, 1 * GUI_SCALE), Size = UDim2.new(1, -2 * GUI_SCALE, 0, 1 * GUI_SCALE), ZIndex = 2, Parent = arrow })
+                Create("Frame", { BackgroundColor3 = ThemeColor("TextMuted"), BorderSizePixel = 0, Position = UDim2.new(0, 2 * GUI_SCALE, 0, 2 * GUI_SCALE), Size = UDim2.new(1, -4 * GUI_SCALE, 0, 1 * GUI_SCALE), ZIndex = 2, Parent = arrow })
                 
                 local dropList = Create("Frame", {
                     BackgroundColor3 = ThemeColor("Border1"),
@@ -1024,7 +1027,7 @@ function ExhibitionLib:CreateWindow(cfg)
                             cb(selected)
                             open = false
                             dropList.Visible = false
-                            arrow.Text = "+"
+                            arrow.Rotation = 0
                             UpdateOptions()
                         end)
                     end
@@ -1037,7 +1040,7 @@ function ExhibitionLib:CreateWindow(cfg)
                         UpdateOptions()
                     end
                     dropList.Visible = open
-                    arrow.Text = open and "-" or "+"
+                    arrow.Rotation = open and 180 or 0
                 end)
                 
                 UpdateOptions()
