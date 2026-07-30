@@ -1400,12 +1400,17 @@ function ExhibitionLib:CreateWindow(cfg)
                 nameLbl.Size = UDim2.new(1, -32 * GUI_SCALE, 0, 9 * GUI_SCALE)
                 nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
                 
+                local initDisplayKey = key
+                if initDisplayKey:match("MouseButton") then
+                    initDisplayKey = initDisplayKey:gsub("MouseButton", "M")
+                end
+                
                 local bindBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
                     Position = UDim2.new(1, -30 * GUI_SCALE, 0, 0),
                     Size = UDim2.new(0, 30 * GUI_SCALE, 0, 10 * GUI_SCALE),
                     Font = Fonts.Regular,
-                    Text = "[" .. (key == "None" and "-" or key) .. "]",
+                    Text = "[" .. (initDisplayKey == "None" and "-" or initDisplayKey) .. "]",
                     TextColor3 = ThemeColor("TextDim"),
                     TextSize = 9 * GUI_SCALE,
                     TextXAlignment = Enum.TextXAlignment.Right,
@@ -1430,13 +1435,18 @@ function ExhibitionLib:CreateWindow(cfg)
                             else
                                 key = keyName
                             end
-                            bindBtn.Text = "[" .. (key == "None" and "-" or key) .. "]"
+                            local displayKey = key
+                            if displayKey:match("MouseButton") then
+                                displayKey = displayKey:gsub("MouseButton", "M")
+                            end
+                            bindBtn.Text = "[" .. (displayKey == "None" and "-" or displayKey) .. "]"
                             bindBtn.TextColor3 = Colors.TextDim
                             cb(key)
                         elseif input.UserInputType.Name:find("MouseButton") then
                             binding = false
-                            key = "None"
-                            bindBtn.Text = "[-]"
+                            key = input.UserInputType.Name
+                            local displayKey = key:gsub("MouseButton", "M")
+                            bindBtn.Text = "[" .. displayKey .. "]"
                             bindBtn.TextColor3 = Colors.TextDim
                             cb(key)
                         end
@@ -1447,7 +1457,11 @@ function ExhibitionLib:CreateWindow(cfg)
                 local comp = {
                     Set = function(k)
                         key = k
-                        bindBtn.Text = "[" .. (key == "None" and "-" or key) .. "]"
+                        local displayKey = key
+                        if type(displayKey) == "string" and displayKey:match("MouseButton") then
+                            displayKey = displayKey:gsub("MouseButton", "M")
+                        end
+                        bindBtn.Text = "[" .. (displayKey == "None" and "-" or displayKey) .. "]"
                         cb(key)
                     end,
                     Get = function() return key end,
