@@ -988,8 +988,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local nameLbl = DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Slider"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
                 
-                local trackHeight = math.floor(2 * GUI_SCALE)
-                local trackCenterY = math.floor(trackHeight / 2)
+                local trackHeight = 1
                 local cSize = math.floor(1.5 * GUI_SCALE)
                 if cSize % 2 == 0 then cSize = cSize + 1 end
                 local cOff = math.floor(cSize / 2)
@@ -1005,22 +1004,12 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local valLbl = DrawTextWithShadow(wrap, tostring(val)..suf, Fonts.Bold, 9 * GUI_SCALE, Colors.TextPrimary, UDim2.new(1, 0, 0, 0), Enum.TextXAlignment.Right, 2)
                 
-                local trackIn = Create("Frame", {
-                    BackgroundColor3 = ThemeColor("White"),
-                    BorderSizePixel = 0,
-                    Position = UDim2.new(0, 1, 0, 1),
-                    Size = UDim2.new(1, -2, 1, -2),
-                    Parent = trackOut
-                })
-                RegisterOpacity(trackIn, "BackgroundTransparency")
-                CreateUIGradient(trackIn, "SlidGradTop", "SlidGradBot")
-                
                 local fill = Create("Frame", {
                     BackgroundColor3 = ThemeColor("White"),
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 0, 0, 0),
                     Size = UDim2.new(0, 0, 1, 0),
-                    Parent = trackIn
+                    Parent = trackOut
                 })
                 RegisterOpacity(fill, "BackgroundTransparency")
                 CreateUIGradient(fill, "Accent", "Accent")
@@ -1070,14 +1059,14 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local dragging = false
                 local function updateSlider(input)
-                    local w = trackIn.AbsoluteSize.X
-                    local px = math.clamp(input.Position.X - trackIn.AbsolutePosition.X, 0, w)
+                    local w = trackOut.AbsoluteSize.X
+                    local px = math.clamp(input.Position.X - trackOut.AbsolutePosition.X, 0, w)
                     SetVal(min + (max - min) * (px / w))
                 end
                 
                 local minusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(0, 0, 0, 12 * GUI_SCALE + trackCenterY - cOff),
+                    Position = UDim2.new(0, 0, 0, 12 * GUI_SCALE - cOff),
                     Size = UDim2.new(0, cSize, 0, cSize),
                     Text = "",
                     ZIndex = 2,
@@ -1095,7 +1084,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local plusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(1, -cSize, 0, 12 * GUI_SCALE + trackCenterY - cOff),
+                    Position = UDim2.new(1, -cSize, 0, 12 * GUI_SCALE - cOff),
                     Size = UDim2.new(0, cSize, 0, cSize),
                     Text = "",
                     ZIndex = 2,
