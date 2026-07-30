@@ -694,8 +694,8 @@ function ExhibitionLib:CreateWindow(cfg)
             
             local secBody = Create("Frame", {
                 BackgroundTransparency = 1,
-                Position = UDim2.new(0, 4 * GUI_SCALE, 0, 5 * GUI_SCALE),
-                Size = UDim2.new(1, -8 * GUI_SCALE, 1, -7 * GUI_SCALE),
+                Position = UDim2.new(0, 4 * GUI_SCALE, 0, 2 * GUI_SCALE),
+                Size = UDim2.new(1, -8 * GUI_SCALE, 1, -4 * GUI_SCALE),
                 Parent = secFill
             })
             
@@ -706,7 +706,7 @@ function ExhibitionLib:CreateWindow(cfg)
             })
             
             local function UpdateSectionHeight()
-                secObj.Height = listLayout.AbsoluteContentSize.Y + 17 * GUI_SCALE
+                secObj.Height = listLayout.AbsoluteContentSize.Y + math.floor(6 * GUI_SCALE)
                 secOut.Size = UDim2.new(0.333, -6 * GUI_SCALE, 0, secObj.Height)
                 RecalculateCol()
             end
