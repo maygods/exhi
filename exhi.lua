@@ -707,7 +707,7 @@ function ExhibitionLib:CreateWindow(cfg)
             })
             RegisterOpacity(titleBg, "BackgroundTransparency")
             
-            local secTitle = DrawTextWithShadow(secOut, secName, Fonts.Regular, 9 * GUI_SCALE, Colors.TextPrimary, UDim2.new(0, 7 * GUI_SCALE, 0, -5 * GUI_SCALE), Enum.TextXAlignment.Left, 5)
+            local secTitle = DrawTextWithShadow(secOut, secName, Fonts.Regular, 7 * GUI_SCALE, Colors.TextPrimary, UDim2.new(0, 7 * GUI_SCALE, 0, -5 * GUI_SCALE), Enum.TextXAlignment.Left, 5)
             
             task.spawn(function()
                 if secTitle.TextBounds.X == 0 then
@@ -823,7 +823,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 RegisterOpacity(boxFillOn, "BackgroundTransparency")
                 CreateUIGradient(boxFillOn, "Accent", "Accent")
                 
-                local nameLbl = DrawTextWithShadow(btn, Capitalize(ecfg.Name or "Toggle"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 10 * GUI_SCALE, 0, 0), Enum.TextXAlignment.Left, 2)
+                local nameLbl = DrawTextWithShadow(btn, Capitalize(ecfg.Name or "Toggle"), Fonts.Regular, 7 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 10 * GUI_SCALE, 0, 0), Enum.TextXAlignment.Left, 2)
                 nameLbl.Size = UDim2.new(1, 0, 1, 0)
                 
                 local function SetState(s)
@@ -843,7 +843,7 @@ function ExhibitionLib:CreateWindow(cfg)
                         Font = Fonts.Regular,
                         Text = "[" .. (bindKey == "None" and "-" or bindKey) .. "]",
                         TextColor3 = Colors.TextDim,
-                        TextSize = 9 * GUI_SCALE,
+                        TextSize = 7 * GUI_SCALE,
                         TextXAlignment = Enum.TextXAlignment.Left,
                         Parent = btn
                     })
@@ -936,7 +936,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 })
                 MountComponent(wrap, ecfg.HalfSize)
                 
-                local nameLbl = DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Slider"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
+                local nameLbl = DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Slider"), Fonts.Regular, 7 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
                 
                 local trackHeight = math.floor(6 * GUI_SCALE)
                 local trackCenterY = math.floor(trackHeight / 2)
@@ -953,7 +953,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 })
                 RegisterOpacity(trackOut, "BackgroundTransparency")
                 
-                local valLbl = DrawTextWithShadow(wrap, tostring(val)..suf, Fonts.Bold, 9 * GUI_SCALE, Colors.TextPrimary, UDim2.new(1, 0, 0, 0), Enum.TextXAlignment.Right, 2)
+                local valLbl = DrawTextWithShadow(wrap, tostring(val)..suf, Fonts.Bold, 7 * GUI_SCALE, Colors.TextPrimary, UDim2.new(1, 0, 0, 0), Enum.TextXAlignment.Right, 2)
                 
                 local trackIn = Create("Frame", {
                     BackgroundColor3 = ThemeColor("White"),
@@ -981,14 +981,14 @@ function ExhibitionLib:CreateWindow(cfg)
                     if ExhibitionLib.DynamicSliders then
                         valLbl.Parent = trackOut
                         valLbl.AnchorPoint = Vector2.new(0.5, 0)
-                        valLbl.Size = UDim2.new(0, 40 * GUI_SCALE, 0, 9 * GUI_SCALE)
+                        valLbl.Size = UDim2.new(0, 40 * GUI_SCALE, 0, 7 * GUI_SCALE)
                         valLbl.TextXAlignment = Enum.TextXAlignment.Center
                         local p = pct(val)
                         valLbl.Position = UDim2.new(p, 0, 0, 5 * GUI_SCALE)
                     else
                         valLbl.Parent = wrap
                         valLbl.AnchorPoint = Vector2.new(1, 0)
-                        valLbl.Size = UDim2.new(0, 40 * GUI_SCALE, 0, 9 * GUI_SCALE)
+                        valLbl.Size = UDim2.new(0, 40 * GUI_SCALE, 0, 7 * GUI_SCALE)
                         valLbl.TextXAlignment = Enum.TextXAlignment.Right
                         valLbl.Position = UDim2.new(1, 0, 0, 0)
                     end
@@ -1117,7 +1117,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 })
                 MountComponent(wrap, ecfg.HalfSize)
                 
-                DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Dropdown"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
+                DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Dropdown"), Fonts.Regular, 7 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
                 
                 local boxOut = Create("Frame", {
                     BackgroundColor3 = ThemeColor("Border1"), -- Black outline
@@ -1139,7 +1139,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 RegisterOpacity(boxIn, "BackgroundTransparency")
                 CreateUIGradient(boxIn, "DropGradTop", "DropGradBot")
                 
-                local selText = DrawTextWithShadow(boxIn, selected, Fonts.Regular, 9 * GUI_SCALE, Colors.TextMuted, UDim2.new(0, 2 * GUI_SCALE, 0, 0), Enum.TextXAlignment.Left, 2)
+                local selText = DrawTextWithShadow(boxIn, selected, Fonts.Regular, 7 * GUI_SCALE, Colors.TextMuted, UDim2.new(0, 2 * GUI_SCALE, 0, 0), Enum.TextXAlignment.Left, 2)
                 selText.Size = UDim2.new(1, -10 * GUI_SCALE, 1, 0)
                 selText.ClipsDescendants = true
                 
@@ -1195,7 +1195,7 @@ function ExhibitionLib:CreateWindow(cfg)
                             Font = opt == selected and Fonts.Bold or Fonts.Regular,
                             Text = opt,
                             TextColor3 = opt == selected and Colors.Accent or Colors.TextPrimary,
-                            TextSize = 9 * GUI_SCALE,
+                            TextSize = 7 * GUI_SCALE,
                             TextXAlignment = Enum.TextXAlignment.Left,
                             ZIndex = 201,
                             Parent = dropListIn
@@ -1260,8 +1260,8 @@ function ExhibitionLib:CreateWindow(cfg)
                 })
                 MountComponent(wrap, ecfg.HalfSize)
                 
-                local nameLbl = DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Keybind"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
-                nameLbl.Size = UDim2.new(1, -32 * GUI_SCALE, 0, 9 * GUI_SCALE)
+                local nameLbl = DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Keybind"), Fonts.Regular, 7 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
+                nameLbl.Size = UDim2.new(1, -32 * GUI_SCALE, 0, 7 * GUI_SCALE)
                 nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
                 
                 local bindBtn = Create("TextButton", {
@@ -1271,7 +1271,7 @@ function ExhibitionLib:CreateWindow(cfg)
                     Font = Fonts.Regular,
                     Text = "[" .. (key == "None" and "-" or key) .. "]",
                     TextColor3 = ThemeColor("TextDim"),
-                    TextSize = 9 * GUI_SCALE,
+                    TextSize = 7 * GUI_SCALE,
                     TextXAlignment = Enum.TextXAlignment.Right,
                     Parent = wrap
                 })
@@ -1358,7 +1358,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 })
                 RegisterOpacity(btnFill, "BackgroundTransparency")
                 
-                local lbl = DrawTextWithShadow(btnFill, Capitalize(ecfg.Name or "Button"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextPrimary, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Center, 2)
+                local lbl = DrawTextWithShadow(btnFill, Capitalize(ecfg.Name or "Button"), Fonts.Regular, 7 * GUI_SCALE, Colors.TextPrimary, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Center, 2)
                 lbl.Size = UDim2.new(1, 0, 1, 0)
                 
                 btn.MouseButton1Click:Connect(cb)
@@ -1376,7 +1376,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 })
                 MountComponent(wrap, ecfg.HalfSize)
                 
-                local nameLbl = DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Color"), Fonts.Regular, 9 * GUI_SCALE, ThemeColor("TextDim"), UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
+                local nameLbl = DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Color"), Fonts.Regular, 7 * GUI_SCALE, ThemeColor("TextDim"), UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
                 
                 local btnOut = Create("TextButton", {
                     BackgroundColor3 = ThemeColor("GroupBorderOut"),
