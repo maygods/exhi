@@ -504,12 +504,8 @@ function ExhibitionLib:CreateWindow(cfg)
         ToggleUI()
     end)
     
-    UserInputService.InputBegan:Connect(function(i, p)
-        if p then return end
-        if i.KeyCode == Enum.KeyCode.RightShift then
-            ToggleUI()
-        end
-    end)
+    -- Note: Removed hardcoded RightShift toggle.
+    -- Use Window:SetVisible() or configure a keybind in test_ui.lua instead.
     
     function WindowAPI:CreateTab(tcfg)
         tcfg = tcfg or {}
@@ -1231,7 +1227,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 UpdateOptions()
                 
                 local comp = { 
-                    Set = function(v) selected = v; selText.Text = v; cb(v) end,
+                    Set = function(v) selected = v; selText.Text = v; UpdateOptions(); cb(v) end,
                     Get = function() return selected end,
                     Type = "Dropdown"
                 }
@@ -1518,11 +1514,13 @@ function ExhibitionLib:CreateWindow(cfg)
     end
     
     function WindowAPI:SetVisible(state)
-        sg.Enabled = state
+        if state ~= isOpen then
+            ToggleUI()
+        end
     end
     
     function WindowAPI:GetVisible()
-        return sg.Enabled
+        return isOpen
     end
 
     function WindowAPI:Notify(ncfg)
@@ -1532,18 +1530,40 @@ function ExhibitionLib:CreateWindow(cfg)
     function ExhibitionLib:SaveConfig(name)
         if not writefile then 
             warn("ExhibitionLib: writefile is not supported by your executor!")
-            return 
+            return false
         end
-        if isfolder and not isfolder("exhi_configs") then 
-            if makefolder then makefolder("exhi_configs") end
+        
+        -- Ensure config folder exists
+        pcall(function()
+            if makefolder and isfolder then
+                if not isfolder("exhi_configs") then
+                    makefolder("exhi_configs")
+                end
+            elseif makefolder then
+                makefolder("exhi_configs")
+            end
+        end)
+        
+        if not self.Flags or next(self.Flags) == nil then
+            warn("ExhibitionLib SaveConfig: No flags registered!")
+            return false
         end
+        
         local data = {}
+        local count = 0
         for flag, comp in pairs(self.Flags) do
-            local val = comp.Get()
-            if comp.Type == "ColorPicker" then
-                data[flag] = {r = val.r, g = val.g, b = val.b}
-            else
-                data[flag] = val
+            local ok, val = pcall(function() return comp.Get() end)
+            if ok and val ~= nil then
+                if comp.Type == "ColorPicker" then
+                    -- Store Color3 as table with 0-255 values and a type marker
+                    local r = math.floor(val.R * 255 + 0.5)
+                    local g = math.floor(val.G * 255 + 0.5)
+                    local b = math.floor(val.B * 255 + 0.5)
+                    data[flag] = {_type = "Color3", r = r, g = g, b = b}
+                else
+                    data[flag] = val
+                end
+                count = count + 1
             end
         end
         
@@ -1554,36 +1574,63 @@ function ExhibitionLib:CreateWindow(cfg)
         
         if not success then
             warn("ExhibitionLib SaveConfig Error:", err)
+            return false
         end
+        print("[ExhibitionLib] Saved config '" .. name .. "' with " .. count .. " flags")
+        return true
     end
     
     function ExhibitionLib:LoadConfig(name)
         if not readfile then 
             warn("ExhibitionLib: readfile is not supported by your executor!")
-            return 
+            return false
+        end
+        
+        local filePath = "exhi_configs/" .. name .. ".json"
+        
+        -- Check if file exists
+        if isfile and not isfile(filePath) then
+            warn("ExhibitionLib LoadConfig: File not found: " .. filePath)
+            return false
         end
         
         local success, data = pcall(function() 
-            if isfile and not isfile("exhi_configs/" .. name .. ".json") then return nil end
-            return HttpService:JSONDecode(readfile("exhi_configs/" .. name .. ".json")) 
+            return HttpService:JSONDecode(readfile(filePath)) 
         end)
         
         if not success then
             warn("ExhibitionLib LoadConfig Error:", data)
-            return
+            return false
         end
         
-        if type(data) == "table" then
-            for flag, val in pairs(data) do
-                if self.Flags[flag] then
+        if type(data) ~= "table" then
+            warn("ExhibitionLib LoadConfig: Invalid config data")
+            return false
+        end
+        
+        local count = 0
+        for flag, val in pairs(data) do
+            if self.Flags and self.Flags[flag] then
+                local ok, err = pcall(function()
                     if self.Flags[flag].Type == "ColorPicker" and type(val) == "table" then
-                        self.Flags[flag].Set(Color3.new(val.r, val.g, val.b))
+                        -- Reconstruct Color3 from saved RGB values (0-255)
+                        local r = (val.r or 0) / 255
+                        local g = (val.g or 0) / 255
+                        local b = (val.b or 0) / 255
+                        self.Flags[flag].Set(Color3.new(r, g, b))
                     else
                         self.Flags[flag].Set(val)
                     end
+                end)
+                if ok then
+                    count = count + 1
+                else
+                    warn("ExhibitionLib LoadConfig: Failed to set flag '" .. flag .. "':", err)
                 end
             end
         end
+        print("[ExhibitionLib] Loaded config '" .. name .. "' - applied " .. count .. " flags")
+        return true
     end
     
     return WindowAPI
