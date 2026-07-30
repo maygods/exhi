@@ -903,7 +903,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 end)
                 
                 local comp = { Set = SetState, Get = function() return state end, Type = "Toggle" }
-                local flag = ecfg.Flag or ecfg.Name
+                local flag = ecfg.Flag or (secName .. "_" .. (ecfg.Name or "Toggle"))
                 if flag then ExhibitionLib.Flags[flag] = comp end
                 return comp
             end
@@ -1099,7 +1099,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 wrap.MouseLeave:Connect(function() HideTooltip() end)
                 
                 local comp = { Set = SetVal, Get = function() return val end, Type = "Slider" }
-                local flag = ecfg.Flag or ecfg.Name
+                local flag = ecfg.Flag or (secName .. "_" .. (ecfg.Name or "Slider"))
                 if flag then ExhibitionLib.Flags[flag] = comp end
                 return comp
             end
@@ -1235,7 +1235,7 @@ function ExhibitionLib:CreateWindow(cfg)
                     Get = function() return selected end,
                     Type = "Dropdown"
                 }
-                local flag = ecfg.Flag or ecfg.Name
+                local flag = ecfg.Flag or (secName .. "_" .. (ecfg.Name or "Dropdown"))
                 if flag then ExhibitionLib.Flags[flag] = comp end
                 return comp
             end
@@ -1308,14 +1308,18 @@ function ExhibitionLib:CreateWindow(cfg)
                 end)
                 
                 RecalculateCol()
-                return {
+                local comp = {
                     Set = function(k)
                         key = k
                         bindBtn.Text = "[" .. (key == "None" and "-" or key) .. "]"
                         cb(key)
                     end,
-                    Get = function() return key end
+                    Get = function() return key end,
+                    Type = "Keybind"
                 }
+                local flag = ecfg.Flag or (secName .. "_" .. (ecfg.Name or "Keybind"))
+                if flag then ExhibitionLib.Flags[flag] = comp end
+                return comp
             end
             
             function SectionAPI:CreateButton(ecfg)
@@ -1503,7 +1507,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local function SetColor(col) color = col; h,s,v = Color3.toHSV(col); UpdateColor(); cb(col) end
                 local comp = { Set = SetColor, Get = function() return color end, Type = "ColorPicker" }
-                local flag = ecfg.Flag or ecfg.Name
+                local flag = ecfg.Flag or (secName .. "_" .. (ecfg.Name or "ColorPicker"))
                 if flag then ExhibitionLib.Flags[flag] = comp end
                 return comp
             end
