@@ -22,6 +22,8 @@ local ESP = {
         EnemyColor = Color3.fromRGB(255, 0, 0),
         FriendColor = Color3.fromRGB(0, 255, 0),
         TeamColors = false,
+        Skeleton = false,
+        SkeletonColor = Color3.fromRGB(255, 255, 255),
     },
     Cache = {}
 }
@@ -116,8 +118,8 @@ local function CreateESPCache()
     local container = Create("Folder", { Parent = sg })
     
     local lines = {}
-    -- Provide enough lines for complex box modes (up to 30 lines)
-    for i = 1, 35 do
+    -- Provide enough lines for complex box modes and skeleton (up to 50 lines)
+    for i = 1, 50 do
         table.insert(lines, DrawLine(container, Color3.new(1,1,1), 0, 0, 0, 1, 1))
     end
     
@@ -187,6 +189,27 @@ local function DrawRect(cache, x, y, w, h, col, trans)
         l.Size = UDim2.new(0, math.max(1, w), 0, math.max(1, h))
         l.BackgroundColor3 = col
         l.BackgroundTransparency = trans or 0
+        l.Rotation = 0
+        cache.LineIndex = cache.LineIndex + 1
+    end
+end
+
+local function DrawRotatedLine(cache, p1, p2, color, thickness)
+    local l = cache.Lines[cache.LineIndex]
+    if l then
+        l.Visible = true
+        
+        local distance = (p1 - p2).Magnitude
+        local center = (p1 + p2) / 2
+        local angle = math.atan2(p2.Y - p1.Y, p2.X - p1.X)
+        
+        l.Size = UDim2.new(0, distance, 0, thickness or 1)
+        l.Position = UDim2.new(0, center.X - distance/2, 0, center.Y - (thickness or 1)/2)
+        l.Rotation = math.deg(angle)
+        l.BackgroundColor3 = color
+        l.BackgroundTransparency = 0
+        l.BorderSizePixel = 0
+        
         cache.LineIndex = cache.LineIndex + 1
     end
 end
@@ -295,6 +318,41 @@ local function UpdateESP()
                             cache.Item.Visible = true
                             cache.Item.Text = tool.Name
                             cache.Item.Position = UDim2.new(0, x + (endx - x)/2, 0, endy + 2)
+                        end
+                    end
+                    
+                    if ESP.Settings.Skeleton then
+                        local char = plr.Character
+                        local r15Links = {
+                            {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
+                            {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"LeftLowerArm", "LeftHand"},
+                            {"UpperTorso", "RightUpperArm"}, {"RightUpperArm", "RightLowerArm"}, {"RightLowerArm", "RightHand"},
+                            {"LowerTorso", "LeftUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"LeftLowerLeg", "LeftFoot"},
+                            {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"RightLowerLeg", "RightFoot"}
+                        }
+                        
+                        local r6Links = {
+                            {"Head", "Torso"}, {"Torso", "Left Arm"}, {"Torso", "Right Arm"},
+                            {"Torso", "Left Leg"}, {"Torso", "Right Leg"}
+                        }
+                        
+                        local isR15 = char:FindFirstChild("UpperTorso") ~= nil
+                        local links = isR15 and r15Links or r6Links
+                        
+                        for _, link in ipairs(links) do
+                            local p1 = char:FindFirstChild(link[1])
+                            local p2 = char:FindFirstChild(link[2])
+                            
+                            if p1 and p2 then
+                                local pos1, vis1 = Camera:WorldToViewportPoint(p1.Position)
+                                local pos2, vis2 = Camera:WorldToViewportPoint(p2.Position)
+                                
+                                if vis1 or vis2 then
+                                    local v1 = Vector2.new(pos1.X, pos1.Y)
+                                    local v2 = Vector2.new(pos2.X, pos2.Y)
+                                    DrawRotatedLine(cache, v1, v2, ESP.Settings.SkeletonColor, 1)
+                                end
+                            end
                         end
                     end
                 end
