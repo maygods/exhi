@@ -988,7 +988,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local nameLbl = DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Slider"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
                 
-                local trackHeight = math.floor(6 * GUI_SCALE)
+                local trackHeight = math.floor(2 * GUI_SCALE)
                 local trackCenterY = math.floor(trackHeight / 2)
                 local cSize = math.floor(1.5 * GUI_SCALE)
                 if cSize % 2 == 0 then cSize = cSize + 1 end
@@ -997,8 +997,8 @@ function ExhibitionLib:CreateWindow(cfg)
                 local trackOut = Create("Frame", {
                     BackgroundColor3 = ThemeColor("GroupBorderOut"),
                     BorderSizePixel = 0,
-                    Position = UDim2.new(0, cSize + 1, 0, 10 * GUI_SCALE),
-                    Size = UDim2.new(1, -(cSize * 2 + 2), 0, trackHeight),
+                    Position = UDim2.new(0, cSize, 0, 12 * GUI_SCALE),
+                    Size = UDim2.new(1, -(cSize * 2), 0, trackHeight),
                     Parent = wrap
                 })
                 RegisterOpacity(trackOut, "BackgroundTransparency")
@@ -1077,7 +1077,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local minusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(0, 0, 0, 10 * GUI_SCALE + trackCenterY - cOff),
+                    Position = UDim2.new(0, 0, 0, 12 * GUI_SCALE + trackCenterY - cOff),
                     Size = UDim2.new(0, cSize, 0, cSize),
                     Text = "",
                     ZIndex = 2,
@@ -1095,7 +1095,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local plusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(1, -cSize, 0, 10 * GUI_SCALE + trackCenterY - cOff),
+                    Position = UDim2.new(1, -cSize, 0, 12 * GUI_SCALE + trackCenterY - cOff),
                     Size = UDim2.new(0, cSize, 0, cSize),
                     Text = "",
                     ZIndex = 2,
