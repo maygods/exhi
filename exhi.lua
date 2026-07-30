@@ -223,13 +223,36 @@ function ExhibitionLib:CreateWindow(cfg)
     -- Main Window Wrap
     local window = Create("Frame", {
         Name = "Window",
-        BackgroundColor3 = ThemeColor("Border2"), -- Outermost Grey Outline
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Position = UDim2.new(0.5, -SCALED_SIZE.X/2, 0.5, -SCALED_SIZE.Y/2),
         Size = UDim2.new(0, SCALED_SIZE.X, 0, SCALED_SIZE.Y),
         Parent = sg
     })
-    RegisterOpacity(window, "BackgroundTransparency", 0, true)
+    
+    local windowGlow = Create("ImageLabel", {
+        Name = "Glow",
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://5028857084",
+        ImageColor3 = ThemeColor("MainFill"),
+        ImageTransparency = 0.3,
+        ScaleType = Enum.ScaleType.Slice,
+        SliceCenter = Rect.new(24, 24, 276, 276),
+        Position = UDim2.new(0, -30 * GUI_SCALE, 0, -30 * GUI_SCALE),
+        Size = UDim2.new(1, 60 * GUI_SCALE, 1, 60 * GUI_SCALE),
+        ZIndex = 0,
+        Parent = window
+    })
+    
+    local windowFrame = Create("Frame", {
+        Name = "WindowFrame",
+        BackgroundColor3 = ThemeColor("Border2"),
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 1, 0),
+        ZIndex = 1,
+        Parent = window
+    })
+    RegisterOpacity(windowFrame, "BackgroundTransparency", 0, true)
     
     local uiScale = Create("UIScale", {
         Scale = 1.0,
@@ -237,7 +260,7 @@ function ExhibitionLib:CreateWindow(cfg)
     })
     
     -- Nested Borders (Grey -> Black -> Grey -> DarkGrey -> Grey -> Fill)
-    local innerBorder = DrawBorder(window, {
+    local innerBorder = DrawBorder(windowFrame, {
         ThemeColor("Border1"), 
         ThemeColor("Border2"), 
         ThemeColor("Border3"), 
