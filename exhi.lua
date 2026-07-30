@@ -91,6 +91,30 @@ function ExhibitionLib:UpdateColor(key, col)
     end
 end
 
+-- Hex color utilities
+local function Color3ToHex(col)
+    local r = math.floor(col.R * 255 + 0.5)
+    local g = math.floor(col.G * 255 + 0.5)
+    local b = math.floor(col.B * 255 + 0.5)
+    return string.format("#%02X%02X%02X", r, g, b)
+end
+
+local function HexToColor3(hex)
+    hex = hex:gsub("#", "")
+    if #hex == 3 then
+        hex = hex:sub(1,1):rep(2) .. hex:sub(2,2):rep(2) .. hex:sub(3,3):rep(2)
+    end
+    if #hex ~= 6 then return nil end
+    local r = tonumber(hex:sub(1,2), 16)
+    local g = tonumber(hex:sub(3,4), 16)
+    local b = tonumber(hex:sub(5,6), 16)
+    if not r or not g or not b then return nil end
+    return Color3.fromRGB(r, g, b)
+end
+
+function ExhibitionLib.Color3ToHex(col) return Color3ToHex(col) end
+function ExhibitionLib.HexToColor3(hex) return HexToColor3(hex) end
+
 -- Utilities
 local function Create(cls, props)
     local inst = Instance.new(cls)
@@ -230,20 +254,50 @@ function ExhibitionLib:CreateWindow(cfg)
         Parent = sg
     })
     
-    local windowGlow = Create("ImageLabel", {
-        Name = "Glow",
-        BackgroundTransparency = 1,
-        Image = "rbxassetid://13169262844",
-        ImageColor3 = ThemeColor("MainFill"),
-        ImageTransparency = 0.4,
-        ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(128, 128, 128, 128),
-        SliceScale = (30 / 128) * GUI_SCALE,
-        Position = UDim2.new(0, -30 * GUI_SCALE, 0, -30 * GUI_SCALE),
-        Size = UDim2.new(1, 60 * GUI_SCALE, 1, 60 * GUI_SCALE),
-        ZIndex = 0,
-        Parent = window
-    })
+    -- Asset-free glow using layered transparent frames
+    local glowColor = Colors.MainFill
+    local glowLayers = {}
+    local GLOW_LAYER_COUNT = 6
+    for i = 1, GLOW_LAYER_COUNT do
+        local spread = i * 5 * GUI_SCALE
+        local alpha = 0.75 + (i / GLOW_LAYER_COUNT) * 0.22 -- 0.78 to 0.97
+        local layer = Create("Frame", {
+            Name = "GlowLayer" .. i,
+            BackgroundColor3 = glowColor,
+            BackgroundTransparency = alpha,
+            BorderSizePixel = 0,
+            Position = UDim2.new(0, -spread, 0, -spread),
+            Size = UDim2.new(1, spread * 2, 1, spread * 2),
+            ZIndex = 0,
+            Parent = window
+        })
+        Create("UICorner", { CornerRadius = UDim.new(0, math.floor(spread * 0.6)), Parent = layer })
+        table.insert(glowLayers, layer)
+        table.insert(ExhibitionLib.ThemeInstances, { Inst = layer, Prop = "BackgroundColor3", Key = "GlowColor" })
+    end
+    Colors.GlowColor = Colors.MainFill
+    
+    -- Expose glow update helper
+    function ExhibitionLib:SetGlowColor(col)
+        Colors.GlowColor = col
+        for _, layer in ipairs(glowLayers) do
+            layer.BackgroundColor3 = col
+        end
+    end
+    
+    function ExhibitionLib:SetGlowEnabled(state)
+        for _, layer in ipairs(glowLayers) do
+            layer.Visible = state
+        end
+    end
+    
+    function ExhibitionLib:SetGlowIntensity(intensity)
+        -- intensity 0-100, controls base transparency
+        local base = 1 - (intensity / 100) * 0.4 -- 1.0 (off) to 0.6 (strong)
+        for i, layer in ipairs(glowLayers) do
+            layer.BackgroundTransparency = base + (i / GLOW_LAYER_COUNT) * (1 - base) * 0.6
+        end
+    end
     
     local windowFrame = Create("Frame", {
         Name = "WindowFrame",
@@ -1243,7 +1297,73 @@ function ExhibitionLib:CreateWindow(cfg)
             end
 
             -- Stubs for the rest to satisfy API requirements
-            function SectionAPI:CreateTextbox(ecfg) return {} end
+            function SectionAPI:CreateTextbox(ecfg)
+                ecfg = ecfg or {}
+                local text = ecfg.Default or ""
+                local cb = ecfg.Callback or function() end
+                local placeholder = ecfg.Placeholder or "..."
+                
+                local wrap = Create("Frame", {
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(1, 0, 0, 20 * GUI_SCALE)
+                })
+                MountComponent(wrap, ecfg.HalfSize)
+                
+                DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Textbox"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
+                
+                local boxOut = Create("Frame", {
+                    BackgroundColor3 = ThemeColor("Border1"),
+                    BorderSizePixel = 0,
+                    Position = UDim2.new(0, 0, 0, 10 * GUI_SCALE),
+                    Size = UDim2.new(1, 0, 0, 11 * GUI_SCALE),
+                    Parent = wrap
+                })
+                RegisterOpacity(boxOut, "BackgroundTransparency")
+                
+                local boxIn = Create("Frame", {
+                    BackgroundColor3 = ThemeColor("White"),
+                    BorderSizePixel = 0,
+                    Position = UDim2.new(0, 1, 0, 1),
+                    Size = UDim2.new(1, -2, 1, -2),
+                    Parent = boxOut
+                })
+                RegisterOpacity(boxIn, "BackgroundTransparency")
+                CreateUIGradient(boxIn, "DropGradTop", "DropGradBot")
+                
+                local input = Create("TextBox", {
+                    BackgroundTransparency = 1,
+                    Position = UDim2.new(0, 3 * GUI_SCALE, 0, 0),
+                    Size = UDim2.new(1, -6 * GUI_SCALE, 1, 0),
+                    Font = Fonts.Regular,
+                    Text = text,
+                    PlaceholderText = placeholder,
+                    PlaceholderColor3 = Colors.TextDark,
+                    TextColor3 = ThemeColor("TextPrimary"),
+                    TextSize = 9 * GUI_SCALE,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    ClearTextOnFocus = false,
+                    ClipsDescendants = true,
+                    TextStrokeColor3 = Colors.Black,
+                    TextStrokeTransparency = 0,
+                    ZIndex = 2,
+                    Parent = boxIn
+                })
+                RegisterOpacity(input, "TextTransparency")
+                
+                input.FocusLost:Connect(function(enterPressed)
+                    text = input.Text
+                    cb(text, enterPressed)
+                end)
+                
+                local comp = {
+                    Set = function(v) text = v; input.Text = v; cb(v, false) end,
+                    Get = function() return text end,
+                    Type = "Textbox"
+                }
+                local flag = ecfg.Flag or (secName .. "_" .. (ecfg.Name or "Textbox"))
+                if flag then ExhibitionLib.Flags[flag] = comp end
+                return comp
+            end
             
             function SectionAPI:CreateKeybind(ecfg)
                 ecfg = ecfg or {}
@@ -1398,7 +1518,7 @@ function ExhibitionLib:CreateWindow(cfg)
                     BackgroundColor3 = ThemeColor("GroupBorderOut"),
                     BorderSizePixel = 0,
                     Position = UDim2.new(1, 5 * GUI_SCALE, 0, 0),
-                    Size = UDim2.new(0, 80 * GUI_SCALE, 0, 80 * GUI_SCALE),
+                    Size = UDim2.new(0, 80 * GUI_SCALE, 0, 95 * GUI_SCALE),
                     Visible = false,
                     ZIndex = 100,
                     Parent = btnOut
@@ -1458,6 +1578,59 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local h, s, v = Color3.toHSV(color)
                 
+                -- Hex input box at the bottom of the picker
+                local hexBoxOut = Create("Frame", {
+                    BackgroundColor3 = ThemeColor("Border1"),
+                    BorderSizePixel = 0,
+                    Position = UDim2.new(0, 4 * GUI_SCALE, 0, 68 * GUI_SCALE),
+                    Size = UDim2.new(0, 72 * GUI_SCALE, 0, 11 * GUI_SCALE),
+                    ZIndex = 101,
+                    Parent = popIn
+                })
+                local hexBoxIn = Create("Frame", {
+                    BackgroundColor3 = ThemeColor("White"),
+                    BorderSizePixel = 0,
+                    Position = UDim2.new(0, 1, 0, 1),
+                    Size = UDim2.new(1, -2, 1, -2),
+                    ZIndex = 101,
+                    Parent = hexBoxOut
+                })
+                CreateUIGradient(hexBoxIn, "DropGradTop", "DropGradBot")
+                
+                local hexLabel = Create("TextLabel", {
+                    BackgroundTransparency = 1,
+                    Position = UDim2.new(0, 1 * GUI_SCALE, 0, 0),
+                    Size = UDim2.new(0, 7 * GUI_SCALE, 1, 0),
+                    Font = Fonts.Regular,
+                    Text = "#",
+                    TextColor3 = Colors.TextMuted,
+                    TextSize = 9 * GUI_SCALE,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    ZIndex = 102,
+                    Parent = hexBoxIn
+                })
+                
+                local hexInput = Create("TextBox", {
+                    BackgroundTransparency = 1,
+                    Position = UDim2.new(0, 7 * GUI_SCALE, 0, 0),
+                    Size = UDim2.new(1, -8 * GUI_SCALE, 1, 0),
+                    Font = Fonts.Regular,
+                    Text = Color3ToHex(color):sub(2),
+                    PlaceholderText = "FFFFFF",
+                    PlaceholderColor3 = Colors.TextDark,
+                    TextColor3 = Colors.TextPrimary,
+                    TextSize = 9 * GUI_SCALE,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    ClearTextOnFocus = true,
+                    ClipsDescendants = true,
+                    TextStrokeColor3 = Colors.Black,
+                    TextStrokeTransparency = 0,
+                    ZIndex = 102,
+                    Parent = hexBoxIn
+                })
+                
+                local updatingFromHex = false
+                
                 local function UpdateColor()
                     color = Color3.fromHSV(h, s, v)
                     btnIn.BackgroundColor3 = color
@@ -1466,8 +1639,26 @@ function ExhibitionLib:CreateWindow(cfg)
                     svCursor.Position = UDim2.new(s, -1, 1-v, -1)
                     hueCursor.Position = UDim2.new(0, 0, h, -1)
                     
+                    -- Update hex display (skip if the change came from the hex box)
+                    if not updatingFromHex then
+                        hexInput.Text = Color3ToHex(color):sub(2)
+                    end
+                    
                     cb(color)
                 end
+                
+                hexInput.FocusLost:Connect(function()
+                    local parsed = HexToColor3(hexInput.Text)
+                    if parsed then
+                        updatingFromHex = true
+                        h, s, v = Color3.toHSV(parsed)
+                        UpdateColor()
+                        updatingFromHex = false
+                    else
+                        -- Invalid hex, revert to current color
+                        hexInput.Text = Color3ToHex(color):sub(2)
+                    end
+                end)
                 UpdateColor()
                 
                 local draggingSV = false
