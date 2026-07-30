@@ -862,39 +862,35 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local minusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(0, -3 * GUI_SCALE, 0, 11 * GUI_SCALE),
-                    Size = UDim2.new(0, 1.5 * GUI_SCALE, 0, 0.5 * GUI_SCALE),
-                    BackgroundColor3 = ThemeColor("TextDim"),
-                    Text = "",
+                    Position = UDim2.new(0, -10 * GUI_SCALE, 0, 8 * GUI_SCALE),
+                    Size = UDim2.new(0, 10 * GUI_SCALE, 0, 10 * GUI_SCALE),
+                    Font = Fonts.Regular,
+                    Text = "-",
+                    TextColor3 = ThemeColor("TextDim"),
+                    TextSize = 10 * GUI_SCALE,
+                    ZIndex = 2,
                     Parent = wrap
                 })
-                RegisterOpacity(minusBtn, "BackgroundTransparency", 0.5)
                 
                 local plusBtn = Create("TextButton", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(1, 0.5 * GUI_SCALE, 0, 10.5 * GUI_SCALE),
-                    Size = UDim2.new(0, 1 * GUI_SCALE, 0, 1.5 * GUI_SCALE),
-                    BackgroundColor3 = ThemeColor("TextDim"),
-                    Text = "",
+                    Position = UDim2.new(1, 0, 0, 8 * GUI_SCALE),
+                    Size = UDim2.new(0, 10 * GUI_SCALE, 0, 10 * GUI_SCALE),
+                    Font = Fonts.Regular,
+                    Text = "+",
+                    TextColor3 = ThemeColor("TextDim"),
+                    TextSize = 10 * GUI_SCALE,
+                    ZIndex = 2,
                     Parent = wrap
                 })
-                RegisterOpacity(plusBtn, "BackgroundTransparency", 0.5)
-                local plusBtnH = Create("Frame", {
-                    BorderSizePixel = 0,
-                    Position = UDim2.new(0.5, -0.75 * GUI_SCALE, 0.5, -0.25 * GUI_SCALE),
-                    Size = UDim2.new(0, 1.5 * GUI_SCALE, 0, 0.5 * GUI_SCALE),
-                    BackgroundColor3 = ThemeColor("TextDim"),
-                    Parent = plusBtn
-                })
-                RegisterOpacity(plusBtnH, "BackgroundTransparency", 0.5)
                 
                 minusBtn.MouseButton1Click:Connect(function() SetVal(val - (max-min)/100) end)
                 plusBtn.MouseButton1Click:Connect(function() SetVal(val + (max-min)/100) end)
                 
-                minusBtn.MouseEnter:Connect(function() minusBtn.BackgroundTransparency = 0 end)
-                minusBtn.MouseLeave:Connect(function() minusBtn.BackgroundTransparency = 0.5 end)
-                plusBtn.MouseEnter:Connect(function() plusBtn.BackgroundTransparency = 0; plusBtnH.BackgroundTransparency = 0 end)
-                plusBtn.MouseLeave:Connect(function() plusBtn.BackgroundTransparency = 0.5; plusBtnH.BackgroundTransparency = 0.5 end)
+                minusBtn.MouseEnter:Connect(function() minusBtn.TextColor3 = ThemeColor("White") end)
+                minusBtn.MouseLeave:Connect(function() minusBtn.TextColor3 = ThemeColor("TextDim") end)
+                plusBtn.MouseEnter:Connect(function() plusBtn.TextColor3 = ThemeColor("White") end)
+                plusBtn.MouseLeave:Connect(function() plusBtn.TextColor3 = ThemeColor("TextDim") end)
 
                 trackOut.InputBegan:Connect(function(i)
                     if i.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -935,7 +931,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Dropdown"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
                 
                 local boxOut = Create("Frame", {
-                    BackgroundColor3 = ThemeColor("GroupBorderOut"),
+                    BackgroundColor3 = ThemeColor("Border1"), -- Black outline
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 0, 0, 10 * GUI_SCALE),
                     Size = UDim2.new(1, 0, 0, 11 * GUI_SCALE),
@@ -944,7 +940,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 RegisterOpacity(boxOut, "BackgroundTransparency")
                 
                 local boxIn = Create("TextButton", {
-                    BackgroundColor3 = ThemeColor("Black"),
+                    BackgroundColor3 = ThemeColor("GroupFill"), -- Grey fill
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 1, 0, 1),
                     Size = UDim2.new(1, -2, 1, -2),
@@ -958,19 +954,21 @@ function ExhibitionLib:CreateWindow(cfg)
                 selText.Size = UDim2.new(1, -10 * GUI_SCALE, 1, 0)
                 selText.ClipsDescendants = true
                 
-                -- Custom pixel art arrow
-                local arrow = Create("Frame", {
+                -- Text chevron
+                local arrow = Create("TextLabel", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(1, -6 * GUI_SCALE, 0.5, -1 * GUI_SCALE),
-                    Size = UDim2.new(0, 4 * GUI_SCALE, 0, 2 * GUI_SCALE),
+                    Position = UDim2.new(1, -12 * GUI_SCALE, 0, 0),
+                    Size = UDim2.new(0, 10 * GUI_SCALE, 1, 0),
+                    Font = Fonts.Regular,
+                    Text = "▼",
+                    TextColor3 = ThemeColor("TextMuted"),
+                    TextSize = 6 * GUI_SCALE,
+                    ZIndex = 2,
                     Parent = boxIn
                 })
-                local a1 = Create("Frame", {BackgroundColor3 = ThemeColor("TextMuted"), BorderSizePixel=0, Position=UDim2.new(0,0,0,0), Size=UDim2.new(1,0,0,1*GUI_SCALE), Parent=arrow})
-                local a2 = Create("Frame", {BackgroundColor3 = ThemeColor("TextMuted"), BorderSizePixel=0, Position=UDim2.new(0,1*GUI_SCALE,0,1*GUI_SCALE), Size=UDim2.new(1,-2*GUI_SCALE,0,1*GUI_SCALE), Parent=arrow})
-                local a3 = Create("Frame", {BackgroundColor3 = ThemeColor("TextMuted"), BorderSizePixel=0, Position=UDim2.new(0,2*GUI_SCALE,0,2*GUI_SCALE), Size=UDim2.new(1,-4*GUI_SCALE,0,1*GUI_SCALE), Parent=arrow})
                 
                 local dropList = Create("Frame", {
-                    BackgroundColor3 = ThemeColor("GroupBorderOut"),
+                    BackgroundColor3 = ThemeColor("Border1"),
                     BorderSizePixel = 0,
                     Size = UDim2.new(0, boxOut.AbsoluteSize.X, 0, #options * 11 * GUI_SCALE),
                     Visible = false,
@@ -987,7 +985,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 RegisterOpacity(dropList, "BackgroundTransparency")
                 
                 local dropListIn = Create("Frame", {
-                    BackgroundColor3 = ThemeColor("Black"),
+                    BackgroundColor3 = ThemeColor("GroupFill"),
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 1, 0, 1),
                     Size = UDim2.new(1, -2, 1, -2),
@@ -1026,7 +1024,7 @@ function ExhibitionLib:CreateWindow(cfg)
                             cb(selected)
                             open = false
                             dropList.Visible = false
-                            arrow.Rotation = 0
+                            arrow.Text = "▼"
                             UpdateOptions()
                         end)
                     end
@@ -1039,7 +1037,7 @@ function ExhibitionLib:CreateWindow(cfg)
                         UpdateOptions()
                     end
                     dropList.Visible = open
-                    arrow.Rotation = open and -90 or 0
+                    arrow.Text = open and "▲" or "▼"
                 end)
                 
                 UpdateOptions()
