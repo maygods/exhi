@@ -711,7 +711,7 @@ function ExhibitionLib:CreateWindow(cfg)
                     local children = secBody:GetChildren()
                     local last
                     for i = #children, 1, -1 do
-                        if children[i]:IsA("GuiObject") then
+                        if children[i]:IsA("GuiObject") and children[i] ~= wrap then
                             last = children[i]
                             break
                         end
@@ -902,8 +902,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local wrap = Create("Frame", {
                     BackgroundTransparency = 1,
-                    Size = UDim2.new(1, 0, 0, 16 * GUI_SCALE),
-                    Parent = secBody
+                    Size = UDim2.new(1, 0, 0, 16 * GUI_SCALE)
                 })
                 MountComponent(wrap, ecfg.HalfSize)
                 
@@ -1202,9 +1201,9 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local wrap = Create("Frame", {
                     BackgroundTransparency = 1,
-                    Size = UDim2.new(1, 0, 0, 12 * GUI_SCALE),
-                    Parent = secBody
+                    Size = UDim2.new(1, 0, 0, 12 * GUI_SCALE)
                 })
+                MountComponent(wrap, ecfg.HalfSize)
                 
                 local nameLbl = DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Keybind"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
                 nameLbl.Size = UDim2.new(1, -32 * GUI_SCALE, 0, 9 * GUI_SCALE)
