@@ -988,7 +988,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local nameLbl = DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Slider"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
                 
-                local trackHeight = 1 + math.floor(2.5 * GUI_SCALE) -- 6 pixels total when GUI_SCALE is 2
+                local trackHeight = 1 + math.floor(1.5 * GUI_SCALE) -- 6 pixels total when GUI_SCALE is 2
                 local trackCenterY = math.floor(trackHeight / 2)
                 local cSize = math.floor(1.5 * GUI_SCALE)
                 if cSize % 2 == 0 then cSize = cSize + 1 end
