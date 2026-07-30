@@ -8,6 +8,7 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
 
 local Colors = {
     MainFill       = Color3.fromRGB(22, 22, 22),
@@ -592,6 +593,13 @@ function ExhibitionLib:CreateWindow(cfg)
         if tabIndex == 1 then SelectTab() end
         
         -- Tab API
+        local ExhibitionLib = {
+            Tabs = {},
+            Sliders = {},
+            OpacityMultiplier = 1,
+            Flags = {}
+        }
+        
         local TabAPI = {
             Sections = {},
             Columns = {{}, {}, {}},
@@ -698,6 +706,33 @@ function ExhibitionLib:CreateWindow(cfg)
             
             listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(UpdateSectionHeight)
             
+            local function MountComponent(wrap, halfSize)
+                local reqHeight = wrap.Size.Y.Offset
+                if not halfSize then
+                    wrap.Parent = secBody
+                else
+                    local last = secBody:GetChildren()[#secBody:GetChildren()]
+                    local container
+                    if last and last.Name == "HalfRow" and #last:GetChildren() == 1 then
+                        container = last
+                        if reqHeight > container.Size.Y.Offset then
+                            container.Size = UDim2.new(1, 0, 0, reqHeight)
+                        end
+                    else
+                        container = Create("Frame", {
+                            Name = "HalfRow",
+                            BackgroundTransparency = 1,
+                            Size = UDim2.new(1, 0, 0, reqHeight),
+                            Parent = secBody
+                        })
+                    end
+                    local count = #container:GetChildren()
+                    wrap.Size = UDim2.new(0.5, -2 * GUI_SCALE, 0, reqHeight)
+                    wrap.Position = UDim2.new(count == 0 and 0 or 0.5, count == 0 and 0 or 2 * GUI_SCALE, 0, 0)
+                    wrap.Parent = container
+                end
+            end
+            
             local SectionAPI = {}
             
             function SectionAPI:CreateToggle(ecfg)
@@ -708,9 +743,9 @@ function ExhibitionLib:CreateWindow(cfg)
                 local btn = Create("TextButton", {
                     BackgroundTransparency = 1,
                     Size = UDim2.new(1, 0, 0, 10 * GUI_SCALE),
-                    Text = "",
-                    Parent = secBody
+                    Text = ""
                 })
+                MountComponent(btn, ecfg.HalfSize)
                 
                 local boxOut = Create("TextButton", {
                     BackgroundColor3 = ThemeColor("GroupBorderOut"),
@@ -833,7 +868,10 @@ function ExhibitionLib:CreateWindow(cfg)
                     HideTooltip()
                 end)
                 
-                return { Set = SetState, Get = function() return state end }
+                local comp = { Set = SetState, Get = function() return state end, Type = "Toggle" }
+                local flag = ecfg.Flag or ecfg.Name
+                if flag then ExhibitionLib.Flags[flag] = comp end
+                return comp
             end
             
             -- Map Checkbox to Toggle
@@ -863,6 +901,7 @@ function ExhibitionLib:CreateWindow(cfg)
                     Size = UDim2.new(1, 0, 0, 16 * GUI_SCALE),
                     Parent = secBody
                 })
+                MountComponent(wrap, ecfg.HalfSize)
                 
                 local nameLbl = DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Slider"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
                 
@@ -999,7 +1038,10 @@ function ExhibitionLib:CreateWindow(cfg)
                 end)
                 wrap.MouseLeave:Connect(function() HideTooltip() end)
                 
-                return { Set = SetVal, Get = function() return val end }
+                local comp = { Set = SetVal, Get = function() return val end, Type = "Slider" }
+                local flag = ecfg.Flag or ecfg.Name
+                if flag then ExhibitionLib.Flags[flag] = comp end
+                return comp
             end
             
             function SectionAPI:CreateDropdown(ecfg)
@@ -1011,9 +1053,9 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local wrap = Create("Frame", {
                     BackgroundTransparency = 1,
-                    Size = UDim2.new(1, 0, 0, 20 * GUI_SCALE),
-                    Parent = secBody
+                    Size = UDim2.new(1, 0, 0, 20 * GUI_SCALE)
                 })
+                MountComponent(wrap, ecfg.HalfSize)
                 
                 DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Dropdown"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
                 
@@ -1128,10 +1170,14 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 UpdateOptions()
                 
-                return { 
+                local comp = { 
                     Set = function(v) selected = v; selText.Text = v; cb(v) end,
-                    Get = function() return selected end
+                    Get = function() return selected end,
+                    Type = "Dropdown"
                 }
+                local flag = ecfg.Flag or ecfg.Name
+                if flag then ExhibitionLib.Flags[flag] = comp end
+                return comp
             end
             
             -- Implement MultiDropdown simply as a wrapper
@@ -1264,9 +1310,9 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local wrap = Create("Frame", {
                     BackgroundTransparency = 1,
-                    Size = UDim2.new(1, 0, 0, 16 * GUI_SCALE),
-                    Parent = secBody
+                    Size = UDim2.new(1, 0, 0, 16 * GUI_SCALE)
                 })
+                MountComponent(wrap, ecfg.HalfSize)
                 
                 local nameLbl = DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Color"), Fonts.Regular, 9 * GUI_SCALE, ThemeColor("TextDim"), UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
                 
@@ -1393,10 +1439,11 @@ function ExhibitionLib:CreateWindow(cfg)
                     secOut.ZIndex = open and 50 or 1
                 end)
                 
-                return {
-                    Set = function(col) color = col; h,s,v = Color3.toHSV(col); UpdateColor() end,
-                    Get = function() return color end
-                }
+                local function SetColor(col) color = col; h,s,v = Color3.toHSV(col); UpdateColor(); cb(col) end
+                local comp = { Set = SetColor, Get = function() return color end, Type = "ColorPicker" }
+                local flag = ecfg.Flag or ecfg.Name
+                if flag then ExhibitionLib.Flags[flag] = comp end
+                return comp
             end
             return SectionAPI
         end
@@ -1406,6 +1453,37 @@ function ExhibitionLib:CreateWindow(cfg)
     
     function WindowAPI:Notify(ncfg)
         print("[ExhibitionLib Notify]", ncfg.Title, ncfg.Content)
+    end
+    
+    function ExhibitionLib:SaveConfig(name)
+        if not writefile then return end
+        if not isfolder("exhi_configs") then makefolder("exhi_configs") end
+        local data = {}
+        for flag, comp in pairs(self.Flags) do
+            local val = comp.Get()
+            if comp.Type == "ColorPicker" then
+                data[flag] = {r = val.r, g = val.g, b = val.b}
+            else
+                data[flag] = val
+            end
+        end
+        writefile("exhi_configs/" .. name .. ".json", HttpService:JSONEncode(data))
+    end
+    
+    function ExhibitionLib:LoadConfig(name)
+        if not readfile or not isfile("exhi_configs/" .. name .. ".json") then return end
+        local success, data = pcall(function() return HttpService:JSONDecode(readfile("exhi_configs/" .. name .. ".json")) end)
+        if success and type(data) == "table" then
+            for flag, val in pairs(data) do
+                if self.Flags[flag] then
+                    if self.Flags[flag].Type == "ColorPicker" and type(val) == "table" then
+                        self.Flags[flag].Set(Color3.new(val.r, val.g, val.b))
+                    else
+                        self.Flags[flag].Set(val)
+                    end
+                end
+            end
+        end
     end
     
     return WindowAPI
