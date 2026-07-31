@@ -947,18 +947,20 @@ function ExhibitionLib:CreateWindow(cfg)
                     local validMouseBinds = {
                         [Enum.UserInputType.MouseButton1] = "M1",
                         [Enum.UserInputType.MouseButton2] = "M2",
-                        [Enum.UserInputType.MouseButton3] = "M3",
-                        [Enum.UserInputType.MouseButton4] = "M4",
-                        [Enum.UserInputType.MouseButton5] = "M5"
+                        [Enum.UserInputType.MouseButton3] = "M3"
                     }
                     
                     UserInputService.InputBegan:Connect(function(input, gpe)
                         if binding and tick() - bindTick > 0.1 then
-                            if input.UserInputType == Enum.UserInputType.Keyboard then
+                            if input.UserInputType == Enum.UserInputType.Keyboard or (input.KeyCode == Enum.KeyCode.ButtonX or input.KeyCode == Enum.KeyCode.ButtonY) then
                                 binding = false
                                 local keyName = input.KeyCode.Name
                                 if keyName == "Escape" or keyName == "Unknown" then
                                     bindKey = "None"
+                                elseif keyName == "ButtonX" then
+                                    bindKey = "Mouse4"
+                                elseif keyName == "ButtonY" then
+                                    bindKey = "Mouse5"
                                 else
                                     bindKey = keyName
                                 end
@@ -975,8 +977,13 @@ function ExhibitionLib:CreateWindow(cfg)
                         else
                             if gpe then return end
                             if bindKey ~= "None" then
-                                if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode.Name == bindKey then
-                                    SetState(not state)
+                                if (input.UserInputType == Enum.UserInputType.Keyboard or input.KeyCode == Enum.KeyCode.ButtonX or input.KeyCode == Enum.KeyCode.ButtonY) then
+                                    local keyName = input.KeyCode.Name
+                                    if keyName == "ButtonX" then keyName = "Mouse4" end
+                                    if keyName == "ButtonY" then keyName = "Mouse5" end
+                                    if keyName == bindKey then
+                                        SetState(not state)
+                                    end
                                 elseif input.UserInputType.Name == bindKey then
                                     SetState(not state)
                                 end
@@ -1451,18 +1458,20 @@ function ExhibitionLib:CreateWindow(cfg)
                 local validMouseBinds = {
                     [Enum.UserInputType.MouseButton1] = "M1",
                     [Enum.UserInputType.MouseButton2] = "M2",
-                    [Enum.UserInputType.MouseButton3] = "M3",
-                    [Enum.UserInputType.MouseButton4] = "M4",
-                    [Enum.UserInputType.MouseButton5] = "M5"
+                    [Enum.UserInputType.MouseButton3] = "M3"
                 }
                 
                 UserInputService.InputBegan:Connect(function(input, gpe)
                     if binding and tick() - bindTick > 0.1 then
-                        if input.UserInputType == Enum.UserInputType.Keyboard then
+                        if input.UserInputType == Enum.UserInputType.Keyboard or (input.KeyCode == Enum.KeyCode.ButtonX or input.KeyCode == Enum.KeyCode.ButtonY) then
                             binding = false
                             local keyName = input.KeyCode.Name
                             if keyName == "Escape" or keyName == "Unknown" then
                                 key = "None"
+                            elseif keyName == "ButtonX" then
+                                key = "Mouse4"
+                            elseif keyName == "ButtonY" then
+                                key = "Mouse5"
                             else
                                 key = keyName
                             end
