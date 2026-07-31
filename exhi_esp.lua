@@ -21,6 +21,7 @@ local ESP = {
         BoxMode = "Box", -- Box, Split, Corner A, Corner B
         EnemyColor = Color3.fromRGB(255, 0, 0),
         FriendColor = Color3.fromRGB(0, 255, 0),
+        TeamCheck = false,
         TeamColors = false,
         Skeleton = false,
         SkeletonColor = Color3.fromRGB(255, 255, 255),
@@ -242,6 +243,8 @@ local function UpdateESP()
             cache.Hide()
             
             if ESP.Settings.Enabled and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health > 0 then
+                if ESP.Settings.TeamCheck and plr.Team == LocalPlayer.Team then continue end
+                
                 local minX, minY, maxX, maxY = GetBoundingBox(plr.Character)
                 if minX then
                     local color = GetPlayerColor(plr)
