@@ -744,7 +744,8 @@ function ExhibitionLib:CreateWindow(cfg)
             table.insert(self.Columns[col], secObj)
             
             local function RecalculateCol()
-                local cy = 0
+                -- Add 5 * GUI_SCALE top padding so the section title doesn't clip off the top edge
+                local cy = 5 * GUI_SCALE
                 for _, s in ipairs(self.Columns[col]) do
                     s.Out.Position = UDim2.new(self.ColXs[col].X.Scale, self.ColXs[col].X.Offset, 0, cy)
                     cy = cy + s.Height + 4 * GUI_SCALE
