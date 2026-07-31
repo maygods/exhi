@@ -638,9 +638,13 @@ function ExhibitionLib:CreateWindow(cfg)
             RegisterOpacity(tabIconLbl, "TextTransparency")
         end
         
-        local tabContent = Create("Frame", {
+        local tabContent = Create("ScrollingFrame", {
             BackgroundTransparency = 1,
             Size = UDim2.new(1, 0, 1, 0),
+            CanvasSize = UDim2.new(0, 0, 0, 0),
+            ScrollBarThickness = 4,
+            ScrollBarImageColor3 = ThemeColor("SidebarActive"),
+            BorderSizePixel = 0,
             Visible = false,
             Parent = contentArea
         })
@@ -746,6 +750,10 @@ function ExhibitionLib:CreateWindow(cfg)
                     cy = cy + s.Height + 4 * GUI_SCALE
                 end
                 self.ColYs[col] = cy
+                
+                -- Update ScrollingFrame CanvasSize based on tallest column
+                local maxY = math.max(self.ColYs[1], self.ColYs[2], self.ColYs[3])
+                tabContent.CanvasSize = UDim2.new(0, 0, 0, maxY + 10 * GUI_SCALE)
             end
             
             RecalculateCol()
@@ -928,15 +936,24 @@ function ExhibitionLib:CreateWindow(cfg)
                     end)
                     
                     local binding = false
+                    local bindTick = 0
                     bindBtn.MouseButton1Click:Connect(function()
+                        bindTick = tick()
                         binding = true
                         bindBtn.Text = "[...]"
                         bindBtn.TextColor3 = Colors.White
                     end)
                     
+                    local validMouseBinds = {
+                        [Enum.UserInputType.MouseButton1] = "M1",
+                        [Enum.UserInputType.MouseButton2] = "M2",
+                        [Enum.UserInputType.MouseButton3] = "M3",
+                        [Enum.UserInputType.MouseButton4] = "M4",
+                        [Enum.UserInputType.MouseButton5] = "M5"
+                    }
+                    
                     UserInputService.InputBegan:Connect(function(input, gpe)
-                        if gpe then return end
-                        if binding then
+                        if binding and tick() - bindTick > 0.1 then
                             if input.UserInputType == Enum.UserInputType.Keyboard then
                                 binding = false
                                 local keyName = input.KeyCode.Name
@@ -948,16 +965,21 @@ function ExhibitionLib:CreateWindow(cfg)
                                 bindBtn.Text = "[" .. (bindKey == "None" and "-" or bindKey) .. "]"
                                 bindBtn.TextColor3 = Colors.TextDim
                                 bindCb(bindKey)
-                            elseif input.UserInputType.Name:find("MouseButton") then
+                            elseif validMouseBinds[input.UserInputType] then
                                 binding = false
-                                bindKey = "None"
-                                bindBtn.Text = "[-]"
+                                bindKey = input.UserInputType.Name
+                                bindBtn.Text = "[" .. validMouseBinds[input.UserInputType] .. "]"
                                 bindBtn.TextColor3 = Colors.TextDim
                                 bindCb(bindKey)
                             end
-                        elseif input.UserInputType == Enum.UserInputType.Keyboard then
-                            if bindKey ~= "None" and input.KeyCode.Name == bindKey then
-                                SetState(not state)
+                        else
+                            if gpe then return end
+                            if bindKey ~= "None" then
+                                if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode.Name == bindKey then
+                                    SetState(not state)
+                                elseif input.UserInputType.Name == bindKey then
+                                    SetState(not state)
+                                end
                             end
                         end
                     end)
@@ -1418,15 +1440,24 @@ function ExhibitionLib:CreateWindow(cfg)
                 })
                 
                 local binding = false
+                local bindTick = 0
                 bindBtn.MouseButton1Click:Connect(function()
+                    bindTick = tick()
                     binding = true
                     bindBtn.Text = "[...]"
                     bindBtn.TextColor3 = Colors.White
                 end)
                 
+                local validMouseBinds = {
+                    [Enum.UserInputType.MouseButton1] = "M1",
+                    [Enum.UserInputType.MouseButton2] = "M2",
+                    [Enum.UserInputType.MouseButton3] = "M3",
+                    [Enum.UserInputType.MouseButton4] = "M4",
+                    [Enum.UserInputType.MouseButton5] = "M5"
+                }
+                
                 UserInputService.InputBegan:Connect(function(input, gpe)
-                    if gpe then return end
-                    if binding then
+                    if binding and tick() - bindTick > 0.1 then
                         if input.UserInputType == Enum.UserInputType.Keyboard then
                             binding = false
                             local keyName = input.KeyCode.Name
@@ -1435,18 +1466,13 @@ function ExhibitionLib:CreateWindow(cfg)
                             else
                                 key = keyName
                             end
-                            local displayKey = key
-                            if displayKey:match("MouseButton") then
-                                displayKey = displayKey:gsub("MouseButton", "M")
-                            end
-                            bindBtn.Text = "[" .. (displayKey == "None" and "-" or displayKey) .. "]"
+                            bindBtn.Text = "[" .. (key == "None" and "-" or key) .. "]"
                             bindBtn.TextColor3 = Colors.TextDim
                             cb(key)
-                        elseif input.UserInputType.Name:find("MouseButton") then
+                        elseif validMouseBinds[input.UserInputType] then
                             binding = false
                             key = input.UserInputType.Name
-                            local displayKey = key:gsub("MouseButton", "M")
-                            bindBtn.Text = "[" .. displayKey .. "]"
+                            bindBtn.Text = "[" .. validMouseBinds[input.UserInputType] .. "]"
                             bindBtn.TextColor3 = Colors.TextDim
                             cb(key)
                         end
