@@ -71,34 +71,25 @@ end
 local function GetBoundingBox(char)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return nil end
-    local cf = hrp.CFrame
-    local size = Vector3.new(2, 5.2, 2) -- Even tighter bounds to look more like Minecraft 0.6x1.8 block hitboxes
     
-    local corners = {
-        cf * CFrame.new(size.X/2, size.Y/2, size.Z/2),
-        cf * CFrame.new(-size.X/2, size.Y/2, size.Z/2),
-        cf * CFrame.new(size.X/2, -size.Y/2, size.Z/2),
-        cf * CFrame.new(-size.X/2, -size.Y/2, size.Z/2),
-        cf * CFrame.new(size.X/2, size.Y/2, -size.Z/2),
-        cf * CFrame.new(-size.X/2, size.Y/2, -size.Z/2),
-        cf * CFrame.new(size.X/2, -size.Y/2, -size.Z/2),
-        cf * CFrame.new(-size.X/2, -size.Y/2, -size.Z/2)
-    }
+    -- Optimized 2-point 2D box approximation
+    local top, topVis = Camera:WorldToViewportPoint(hrp.Position + Vector3.new(0, 2.5, 0))
+    local bot, botVis = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
     
-    local minX, minY = math.huge, math.huge
-    local maxX, maxY = -math.huge, -math.huge
-    local visible = false
+    -- Only draw if they are in front of the camera
+    if not topVis and not botVis then return nil end
     
-    for _, corner in ipairs(corners) do
-        local pos, vis = Camera:WorldToViewportPoint(corner.Position)
-        if vis then visible = true end
-        if pos.X < minX then minX = pos.X end
-        if pos.X > maxX then maxX = pos.X end
-        if pos.Y < minY then minY = pos.Y end
-        if pos.Y > maxY then maxY = pos.Y end
-    end
+    local height = math.abs(bot.Y - top.Y)
+    local width = height * 0.45 -- Typical Roblox R15/R6 width ratio
     
-    if not visible then return nil end
+    -- Safety check for players directly above/below breaking perspective
+    if height < 1 then return nil end
+    
+    local centerX = (top.X + bot.X) / 2
+    local minX = centerX - width / 2
+    local maxX = centerX + width / 2
+    local minY = math.min(top.Y, bot.Y)
+    local maxY = math.max(top.Y, bot.Y)
     
     return minX, minY, maxX, maxY
 end
