@@ -924,7 +924,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 RegisterOpacity(boxFillOn, "BackgroundTransparency")
                 CreateUIGradient(boxFillOn, "Accent", "Accent")
                 
-                local nameLbl = DrawTextWithShadow(btn, Capitalize(ecfg.Name or "Toggle"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 10 * GUI_SCALE, 0, 0), Enum.TextXAlignment.Left, 2)
+                local nameLbl = DrawTextWithShadow(btn, Capitalize(ecfg.Name or "Toggle"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 8 * GUI_SCALE, 0, 0), Enum.TextXAlignment.Left, 2)
                 nameLbl.Size = UDim2.new(1, 0, 1, 0)
                 
                 local function SetState(s)
@@ -953,7 +953,7 @@ function ExhibitionLib:CreateWindow(cfg)
                         if nameLbl.TextBounds.X == 0 then
                             nameLbl:GetPropertyChangedSignal("TextBounds"):Wait()
                         end
-                        bindBtn.Position = UDim2.new(0, 10 * GUI_SCALE + nameLbl.TextBounds.X + 4 * GUI_SCALE, 0, 0)
+                        bindBtn.Position = UDim2.new(0, 8 * GUI_SCALE + nameLbl.TextBounds.X + 4 * GUI_SCALE, 0, 0)
                     end)
                     
                     local binding = false
@@ -1074,13 +1074,22 @@ function ExhibitionLib:CreateWindow(cfg)
                 local plusXOffset = rightExtend and edgeOffset or 0
 
                 local trackOut = Create("Frame", {
-                    BackgroundColor3 = ThemeColor("GroupBorderOut"),
+                    BackgroundColor3 = ThemeColor("Border1"),
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, minusX + cSize, 0, 12 * GUI_SCALE),
                     Size = UDim2.new(1, plusXOffset - minusX - (cSize * 2), 0, trackHeight),
                     Parent = wrap
                 })
                 RegisterOpacity(trackOut, "BackgroundTransparency")
+                
+                local trackIn = Create("Frame", {
+                    BackgroundColor3 = ThemeColor("MainFill"),
+                    BorderSizePixel = 0,
+                    Position = UDim2.new(0, 1, 0, 1),
+                    Size = UDim2.new(1, -2, 1, -2),
+                    Parent = trackOut
+                })
+                RegisterOpacity(trackIn, "BackgroundTransparency")
                 
                 local valLbl = DrawTextWithShadow(wrap, tostring(val)..suf, Fonts.Bold, 9 * GUI_SCALE, Colors.TextPrimary, UDim2.new(1, 0, 0, 0), Enum.TextXAlignment.Right, 2)
                 
@@ -1089,7 +1098,7 @@ function ExhibitionLib:CreateWindow(cfg)
                     BorderSizePixel = 0,
                     Position = UDim2.new(0, 0, 0, 0),
                     Size = UDim2.new(0, 0, 1, 0),
-                    Parent = trackOut
+                    Parent = trackIn
                 })
                 RegisterOpacity(fill, "BackgroundTransparency")
                 CreateUIGradient(fill, "Accent", "Accent")
@@ -1139,8 +1148,8 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local dragging = false
                 local function updateSlider(input)
-                    local w = trackOut.AbsoluteSize.X
-                    local px = math.clamp(input.Position.X - trackOut.AbsolutePosition.X, 0, w)
+                    local w = trackIn.AbsoluteSize.X
+                    local px = math.clamp(input.Position.X - trackIn.AbsolutePosition.X, 0, w)
                     SetVal(min + (max - min) * (px / w))
                 end
                 
