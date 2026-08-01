@@ -247,14 +247,34 @@ end
 function ExhibitionLib:CreateWindow(cfg)
     cfg = cfg or {}
     
+    local charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    local randName = ""
+    for i = 1, 16 do randName = randName .. string.sub(charset, math.random(1, #charset), math.random(1, #charset)) end
+
     local sg = Create("ScreenGui", {
-        Name = "ExhibitionUI",
+        Name = randName,
         ResetOnSpawn = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         IgnoreGuiInset = true,
     })
     pcall(function() if syn then syn.protect_gui(sg) end end)
-    sg.Parent = CoreGui:FindFirstChild("RobloxGui") or Players.LocalPlayer:WaitForChild("PlayerGui")
+    
+    local targetParent = CoreGui:FindFirstChild("RobloxGui") or Players.LocalPlayer:WaitForChild("PlayerGui")
+    local modulesFolder = targetParent:FindFirstChild("Modules")
+    if not modulesFolder then
+        modulesFolder = Instance.new("Folder")
+        modulesFolder.Name = "Modules"
+        modulesFolder.Parent = targetParent
+    end
+    sg.Parent = modulesFolder
+    
+    sg.AncestryChanged:Connect(function(_, parent)
+        if not parent and sg.Parent ~= modulesFolder then
+            task.defer(function()
+                pcall(function() sg.Parent = modulesFolder end)
+            end)
+        end
+    end)
     
     -- Darken Background
     local bgDarken = Create("Frame", {
