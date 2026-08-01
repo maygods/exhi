@@ -30,11 +30,33 @@ local ESP = {
 }
 
 local sg = Instance.new("ScreenGui")
-sg.Name = "ExhibitionESP"
+-- Randomize GUI Name for stealth
+local charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+local randName = ""
+for i = 1, 16 do randName = randName .. string.sub(charset, math.random(1, #charset), math.random(1, #charset)) end
+sg.Name = randName
 sg.IgnoreGuiInset = true
 sg.ResetOnSpawn = false
 pcall(function() if syn then syn.protect_gui(sg) end end)
-sg.Parent = CoreGui:FindFirstChild("RobloxGui") or LocalPlayer:WaitForChild("PlayerGui")
+
+-- Attempt to hide inside a deep, legitimate folder
+local targetParent = CoreGui:FindFirstChild("RobloxGui") or LocalPlayer:WaitForChild("PlayerGui")
+local modulesFolder = targetParent:FindFirstChild("Modules")
+if not modulesFolder then
+    modulesFolder = Instance.new("Folder")
+    modulesFolder.Name = "Modules"
+    modulesFolder.Parent = targetParent
+end
+sg.Parent = modulesFolder
+
+-- Auto-reparent if destroyed
+sg.AncestryChanged:Connect(function(_, parent)
+    if not parent and sg.Parent ~= modulesFolder then
+        task.defer(function()
+            pcall(function() sg.Parent = modulesFolder end)
+        end)
+    end
+end)
 
 local Colors = {
     BlackTrans = Color3.fromRGB(0, 0, 0), -- We use BackgroundTransparency = 150/255 -> 0.41 approx
