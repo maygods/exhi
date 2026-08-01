@@ -68,30 +68,100 @@ local function BlendColors(progress)
     end
 end
 
-local function GetBoundingBox(char)
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return nil end
+local PlayerUtils = {}
+
+function PlayerUtils.GetBodyParts(character)
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local parts = {}
+    local accessoryHandles = {}
+    if humanoid then
+        for _, acc in ipairs(humanoid:GetAccessories()) do
+            if acc:FindFirstChild("Handle") then
+                accessoryHandles[acc.Handle] = true
+            end
+        end
+    end
+    for _, descendant in ipairs(character:GetDescendants()) do
+        if descendant:IsA("BasePart") and not accessoryHandles[descendant] then
+            if descendant.Name ~= "HumanoidRootPart" and not descendant:FindFirstChildWhichIsA("Motor6D") and not descendant:FindFirstChildWhichIsA("Weld") and not descendant:FindFirstChildWhichIsA("WeldConstraint") then
+                if character.PrimaryPart ~= descendant then
+                    continue
+                end
+            end
+            table.insert(parts, descendant)
+        end
+    end
+    if #parts == 0 then
+        for _, descendant in ipairs(character:GetDescendants()) do
+            if descendant:IsA("BasePart") then
+                table.insert(parts, descendant)
+            end
+        end
+    end
+    return parts
+end
+
+function PlayerUtils.GetBoundingBox(character)
+    local parts = PlayerUtils.GetBodyParts(character)
+    if #parts == 0 then return nil end
+
+    local rootPart = character:FindFirstChild("HumanoidRootPart") or character.PrimaryPart or parts[1]
+    if not rootPart then return nil end
+
+    local min = Vector3.new(math.huge, math.huge, math.huge)
+    local max = Vector3.new(-math.huge, -math.huge, -math.huge)
+
+    local rootCFrame = rootPart.CFrame
+    for _, part in ipairs(parts) do
+        local cf = part.CFrame
+        local size = part.Size / 2
+        local corners = {
+            cf * Vector3.new(size.X, size.Y, size.Z), cf * Vector3.new(size.X, size.Y, -size.Z),
+            cf * Vector3.new(size.X, -size.Y, size.Z), cf * Vector3.new(size.X, -size.Y, -size.Z),
+            cf * Vector3.new(-size.X, size.Y, size.Z), cf * Vector3.new(-size.X, size.Y, -size.Z),
+            cf * Vector3.new(-size.X, -size.Y, size.Z), cf * Vector3.new(-size.X, -size.Y, -size.Z)
+        }
+        for _, corner in ipairs(corners) do
+            local localPos = rootCFrame:PointToObjectSpace(corner)
+            min = min:Min(localPos)
+            max = max:Max(localPos)
+        end
+    end
     
-    -- Optimized 2-point 2D box approximation
-    local top, topVis = Camera:WorldToViewportPoint(hrp.Position + Vector3.new(0, 2.5, 0))
-    local bot, botVis = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
-    
-    -- Only draw if they are in front of the camera
-    if not topVis and not botVis then return nil end
-    
-    local height = math.abs(bot.Y - top.Y)
-    local width = height * 0.45 -- Typical Roblox R15/R6 width ratio
-    
-    -- Safety check for players directly above/below breaking perspective
-    if height < 1 then return nil end
-    
-    local centerX = (top.X + bot.X) / 2
-    local minX = centerX - width / 2
-    local maxX = centerX + width / 2
-    local minY = math.min(top.Y, bot.Y)
-    local maxY = math.max(top.Y, bot.Y)
-    
-    return minX, minY, maxX, maxY
+    min = min - Vector3.new(0.1, 0.1, 0.1)
+    max = max + Vector3.new(0.1, 0.1, 0.1)
+
+    return { Min = min, Max = max, Root = rootPart }
+end
+
+function PlayerUtils.GetScreenBox(box, camera)
+    if not box then return nil end
+    local rootCF = box.Root.CFrame
+    local corners = {
+        rootCF * box.Min, rootCF * box.Max,
+        rootCF * Vector3.new(box.Min.X, box.Min.Y, box.Max.Z),
+        rootCF * Vector3.new(box.Min.X, box.Max.Y, box.Min.Z),
+        rootCF * Vector3.new(box.Min.X, box.Max.Y, box.Max.Z),
+        rootCF * Vector3.new(box.Max.X, box.Min.Y, box.Min.Z),
+        rootCF * Vector3.new(box.Max.X, box.Min.Y, box.Max.Z),
+        rootCF * Vector3.new(box.Max.X, box.Max.Y, box.Min.Z),
+    }
+
+    local minScreen = Vector2.new(math.huge, math.huge)
+    local maxScreen = Vector2.new(-math.huge, -math.huge)
+    local allOffScreen = true
+
+    for _, corner in ipairs(corners) do
+        local screen, onScreen = camera:WorldToViewportPoint(corner)
+        if onScreen then
+            allOffScreen = false
+            minScreen = Vector2.new(math.min(minScreen.X, screen.X), math.min(minScreen.Y, screen.Y))
+            maxScreen = Vector2.new(math.max(maxScreen.X, screen.X), math.max(maxScreen.Y, screen.Y))
+        end
+    end
+
+    if allOffScreen then return nil end
+    return minScreen.X, minScreen.Y, maxScreen.X, maxScreen.Y
 end
 
 -- Line drawing utility using Frames
@@ -233,13 +303,15 @@ local function UpdateESP()
             cache.LineIndex = 1
             cache.Hide()
             
-            if ESP.Settings.Enabled and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health > 0 then
+            if ESP.Settings.Enabled and plr.Character and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health > 0 then
                 if ESP.Settings.TeamCheck and plr.Team == LocalPlayer.Team then continue end
                 
-                local minX, minY, maxX, maxY = GetBoundingBox(plr.Character)
-                if minX then
-                    local color = GetPlayerColor(plr)
-                    local x, y, endx, endy = minX, minY, maxX, maxY
+                local box3d = PlayerUtils.GetBoundingBox(plr.Character)
+                if box3d then
+                    local minX, minY, maxX, maxY = PlayerUtils.GetScreenBox(box3d, Camera)
+                    if minX then
+                        local color = GetPlayerColor(plr)
+                        local x, y, endx, endy = minX, minY, maxX, maxY
                     
                     if ESP.Settings.Boxes then
                         if ESP.Settings.BoxMode == "Box" then
