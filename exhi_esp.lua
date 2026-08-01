@@ -73,24 +73,33 @@ local PlayerUtils = {}
 function PlayerUtils.GetBodyParts(character)
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     local parts = {}
-    local accessoryHandles = {}
+    local ignored = {}
+    
     if humanoid then
         for _, acc in ipairs(humanoid:GetAccessories()) do
-            if acc:FindFirstChild("Handle") then
-                accessoryHandles[acc.Handle] = true
+            for _, desc in ipairs(acc:GetDescendants()) do
+                if desc:IsA("BasePart") then ignored[desc] = true end
             end
         end
     end
+    
+    for _, tool in ipairs(character:GetChildren()) do
+        if tool:IsA("Tool") then
+            for _, desc in ipairs(tool:GetDescendants()) do
+                if desc:IsA("BasePart") then ignored[desc] = true end
+            end
+        end
+    end
+
     for _, descendant in ipairs(character:GetDescendants()) do
-        if descendant:IsA("BasePart") and not accessoryHandles[descendant] then
-            if descendant.Name ~= "HumanoidRootPart" and not descendant:FindFirstChildWhichIsA("Motor6D") and not descendant:FindFirstChildWhichIsA("Weld") and not descendant:FindFirstChildWhichIsA("WeldConstraint") then
-                if character.PrimaryPart ~= descendant then
-                    continue
-                end
+        if descendant:IsA("BasePart") and not ignored[descendant] then
+            if descendant.Transparency >= 1 and descendant.Name ~= "HumanoidRootPart" and descendant ~= character.PrimaryPart then
+                continue
             end
             table.insert(parts, descendant)
         end
     end
+
     if #parts == 0 then
         for _, descendant in ipairs(character:GetDescendants()) do
             if descendant:IsA("BasePart") then
