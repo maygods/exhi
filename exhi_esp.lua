@@ -422,6 +422,7 @@ local function UpdateESP()
                         end
                     end
                 end
+                end
             else
                 cache.Hide()
             end
