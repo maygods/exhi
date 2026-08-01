@@ -729,13 +729,12 @@ function ExhibitionLib:CreateWindow(cfg)
         
         local TabAPI = {
             Sections = {},
-            Columns = {{}, {}, {}},
+            Columns = {{}, {}},
             ColXs = {
                 UDim2.new(0, 0, 0, 0),
-                UDim2.new(0.3333, 2 * GUI_SCALE, 0, 0),
-                UDim2.new(0.6666, 4 * GUI_SCALE, 0, 0)
+                UDim2.new(0.5, 3 * GUI_SCALE, 0, 0)
             },
-            ColYs = {6 * GUI_SCALE, 6 * GUI_SCALE, 6 * GUI_SCALE}
+            ColYs = {6 * GUI_SCALE, 6 * GUI_SCALE}
         }
         
         function TabAPI:CreateSection(scfg)
@@ -745,7 +744,7 @@ function ExhibitionLib:CreateWindow(cfg)
             -- Find shortest column
             local col = 1
             local min_y = self.ColYs[1]
-            for i=2, 3 do
+            for i=2, 2 do
                 if self.ColYs[i] < min_y then
                     min_y = self.ColYs[i]
                     col = i
@@ -756,7 +755,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 BackgroundColor3 = ThemeColor("GroupBorderOut"),
                 BorderSizePixel = 0,
                 Position = UDim2.new(self.ColXs[col].X.Scale, self.ColXs[col].X.Offset, 0, self.ColYs[col]),
-                Size = UDim2.new(0.3333, -4 * GUI_SCALE, 0, 20), -- Height updated dynamically
+                Size = UDim2.new(0.5, -3 * GUI_SCALE, 0, 20), -- Height updated dynamically
                 Parent = tabContent
             })
             
@@ -773,7 +772,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 self.ColYs[col] = cy
                 
                 -- Update ScrollingFrame CanvasSize based on tallest column
-                local maxY = math.max(self.ColYs[1], self.ColYs[2], self.ColYs[3])
+                local maxY = math.max(self.ColYs[1], self.ColYs[2])
                 tabContent.CanvasSize = UDim2.new(0, 0, 0, maxY + 6 * GUI_SCALE)
             end
             
@@ -832,7 +831,7 @@ function ExhibitionLib:CreateWindow(cfg)
             
             local function UpdateSectionHeight()
                 secObj.Height = listLayout.AbsoluteContentSize.Y + math.floor(8 * GUI_SCALE) + 4
-                secOut.Size = UDim2.new(0.3333, -4 * GUI_SCALE, 0, secObj.Height)
+                secOut.Size = UDim2.new(0.5, -3 * GUI_SCALE, 0, secObj.Height)
                 RecalculateCol()
             end
             
@@ -1060,7 +1059,7 @@ function ExhibitionLib:CreateWindow(cfg)
                 
                 local nameLbl = DrawTextWithShadow(wrap, Capitalize(ecfg.Name or "Slider"), Fonts.Regular, 9 * GUI_SCALE, Colors.TextDim, UDim2.new(0, 0, 0, 0), Enum.TextXAlignment.Left, 2)
                 
-                local trackHeight = 1 + math.floor(3 * GUI_SCALE) -- 6 pixels total when GUI_SCALE is 2
+                local trackHeight = 1 + math.floor(4 * GUI_SCALE) -- 9 pixels total when GUI_SCALE is 2
                 local trackCenterY = math.floor(trackHeight / 2)
                 local cSize = math.floor(1.5 * GUI_SCALE)
                 if cSize % 2 == 0 then cSize = cSize + 1 end
