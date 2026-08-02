@@ -133,66 +133,46 @@ function PlayerUtils.GetBodyParts(character)
 end
 
 function PlayerUtils.GetBoundingBox(character)
-    local parts = PlayerUtils.GetBodyParts(character)
-    if #parts == 0 then return nil end
-
-    local rootPart = character:FindFirstChild("HumanoidRootPart") or character.PrimaryPart or parts[1]
-    if not rootPart then return nil end
-
-    local min = Vector3.new(math.huge, math.huge, math.huge)
-    local max = Vector3.new(-math.huge, -math.huge, -math.huge)
-
-    local rootCFrame = rootPart.CFrame
-    for _, part in ipairs(parts) do
-        local cf = part.CFrame
-        local size = part.Size / 2
-        local corners = {
-            cf * Vector3.new(size.X, size.Y, size.Z), cf * Vector3.new(size.X, size.Y, -size.Z),
-            cf * Vector3.new(size.X, -size.Y, size.Z), cf * Vector3.new(size.X, -size.Y, -size.Z),
-            cf * Vector3.new(-size.X, size.Y, size.Z), cf * Vector3.new(-size.X, size.Y, -size.Z),
-            cf * Vector3.new(-size.X, -size.Y, size.Z), cf * Vector3.new(-size.X, -size.Y, -size.Z)
-        }
-        for _, corner in ipairs(corners) do
-            local localPos = rootCFrame:PointToObjectSpace(corner)
-            min = min:Min(localPos)
-            max = max:Max(localPos)
-        end
+    local rootPart = character:FindFirstChild("HumanoidRootPart") or character.PrimaryPart
+    if not rootPart then
+        local parts = PlayerUtils.GetBodyParts(character)
+        if #parts == 0 then return nil end
+        rootPart = parts[1]
     end
-    
-    min = min - Vector3.new(0.1, 0.1, 0.1)
-    max = max + Vector3.new(0.1, 0.1, 0.1)
+
+    -- Use a fixed size bounding box to prevent jitter from animations
+    local min = Vector3.new(-1.5, -3, -1.5)
+    local max = Vector3.new(1.5, 3, 1.5)
 
     return { Min = min, Max = max, Root = rootPart }
 end
 
 function PlayerUtils.GetScreenBox(box, camera)
     if not box then return nil end
-    local rootCF = box.Root.CFrame
-    local corners = {
-        rootCF * box.Min, rootCF * box.Max,
-        rootCF * Vector3.new(box.Min.X, box.Min.Y, box.Max.Z),
-        rootCF * Vector3.new(box.Min.X, box.Max.Y, box.Min.Z),
-        rootCF * Vector3.new(box.Min.X, box.Max.Y, box.Max.Z),
-        rootCF * Vector3.new(box.Max.X, box.Min.Y, box.Min.Z),
-        rootCF * Vector3.new(box.Max.X, box.Min.Y, box.Max.Z),
-        rootCF * Vector3.new(box.Max.X, box.Max.Y, box.Min.Z),
-    }
+    local rootPos = box.Root.Position
+    -- Calculate fixed top and bottom relative to world Y, so it's always upright
+    -- This entirely stops perspective distortion when turning and stabilizes the box completely.
+    local topPos = rootPos + Vector3.new(0, 3, 0)
+    local botPos = rootPos - Vector3.new(0, 3.5, 0)
 
-    local minScreen = Vector2.new(math.huge, math.huge)
-    local maxScreen = Vector2.new(-math.huge, -math.huge)
-    local allOffScreen = true
+    local topScreen, topVis = camera:WorldToViewportPoint(topPos)
+    local botScreen, botVis = camera:WorldToViewportPoint(botPos)
 
-    for _, corner in ipairs(corners) do
-        local screen, onScreen = camera:WorldToViewportPoint(corner)
-        if onScreen then
-            allOffScreen = false
-            minScreen = Vector2.new(math.min(minScreen.X, screen.X), math.min(minScreen.Y, screen.Y))
-            maxScreen = Vector2.new(math.max(maxScreen.X, screen.X), math.max(maxScreen.Y, screen.Y))
-        end
-    end
+    -- If the character is totally behind camera, don't draw
+    if topScreen.Z < 0 and botScreen.Z < 0 then return nil end
 
-    if allOffScreen then return nil end
-    return minScreen.X, minScreen.Y, maxScreen.X, maxScreen.Y
+    -- If partially behind, also don't draw as it will glitch (or could clamp if desired, but skipping is safer)
+    if topScreen.Z < 0 or botScreen.Z < 0 then return nil end
+
+    local height = math.abs(topScreen.Y - botScreen.Y)
+    local width = height * 0.65 -- Standard 2D ESP aspect ratio
+
+    local minX = topScreen.X - (width / 2)
+    local maxX = topScreen.X + (width / 2)
+    local minY = math.min(topScreen.Y, botScreen.Y)
+    local maxY = math.max(topScreen.Y, botScreen.Y)
+
+    return minX, minY, maxX, maxY
 end
 
 -- Line drawing utility using Frames
