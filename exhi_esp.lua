@@ -1,17 +1,13 @@
 --[[
-    Exhibition Dynamic ESP  —  ESP_VERSION_4_RESOLVER
-
-    Why v3 didn't draw: every non-local player had Player.Character == nil
-    (custom spawn system). This version resolves characters by fallback:
-      1. Player.Character (standard)
-      2. Workspace[Player.Name]
-      3. Workspace.<CommonFolder>[Player.Name]
-         (Characters, Alive, Players, Entities, Chars, ...)
-      4. Attribute match on UserId/PlayerId/OwnerId
-      5. Breadth-limited scan of Workspace (cached 2s, shared across players)
-      6. Substring fuzzy match against cached map
-
-    Diagnostic now shows exactly which path found each character.
+    Exhibition Dynamic ESP  —  ESP_VERSION_5_FAST
+    Fixes:
+      - Fuzzy matcher no longer catastrophically mis-matches "2" to every player.
+      - Characters folder is the primary resolver path (matches 6 different ways).
+      - Debris / Ragdolls folders are skipped during scans.
+      - Bounds sanity check rejects models > 40 studs wide (bad matches).
+      - Resolver result cached per player (0.3s TTL) — no per-frame fuzzy work.
+      - Bounds only recomputed when reference part actually moved.
+      - Diagnostic dumps Characters folder model names + attributes.
 ]]
 
 local Players = game:GetService("Players")
@@ -32,14 +28,20 @@ local ESP = {
         IncludeAccessories = false,
         SkeletonMode = "Auto",
         BoundsPadding = 0.1,
+        MaxBoundsStuds = 40,
     },
-    Cache = {}, BoundsCache = {}, BoundsCacheTime = {},
+    Cache = {},
+    BoundsCache = {},
+    BoundsCacheTime = {},
+    BoundsRefPos = {},
+    ResolverCache = {},
+    ResolverCacheTime = {},
 }
 
-print("[Exhibition ESP] Loading ESP_VERSION_4_RESOLVER...")
+print("[Exhibition ESP] Loading ESP_VERSION_5_FAST...")
 
 -----------------------------------------------------
--- ScreenGui setup (working parent path)
+-- ScreenGui setup
 -----------------------------------------------------
 local sg = Instance.new("ScreenGui")
 local charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -96,40 +98,107 @@ end
 
 
 -----------------------------------------------------
--- Character resolution (the fix)
+-- Character resolution
 -----------------------------------------------------
+local SKIP_FOLDERS = {
+    Debris = true, Ragdolls = true, Effects = true, Particles = true,
+    Fx = true, VFX = true, WorkspaceFX = true,
+}
+
 local CharacterMap = {}
 local CharacterMapTime = 0
-local CHARACTER_MAP_TTL = 2.0
-local lastResolveSource = {}   -- plr -> "path used"
+local CHARACTER_MAP_TTL = 4.0
+local RESOLVER_CACHE_TTL = 0.3
 
 local function LooksLikeCharacter(model)
     if not model:IsA("Model") then return false end
     return model:FindFirstChildOfClass("Humanoid") ~= nil
         or model:FindFirstChild("HumanoidRootPart") ~= nil
         or model:FindFirstChild("Head") ~= nil
-        or model:FindFirstChild("Torso") ~= nil
         or model:FindFirstChild("UpperTorso") ~= nil
+        or model:FindFirstChild("Torso") ~= nil
 end
 
--- Scan Workspace up to 3 levels deep. Only called once per TTL window.
+-- Match a player to any model inside Workspace.Characters using 6 strategies.
+local function TryMatchInCharacters(plr)
+    local folder = Workspace:FindFirstChild("Characters")
+    if not folder then return nil end
+
+    -- 1. Exact name match
+    local byName = folder:FindFirstChild(plr.Name)
+    if byName and LooksLikeCharacter(byName) then
+        return byName, "Characters[exact]"
+    end
+
+    -- 2. Name == UserId (common in custom systems)
+    local byUidName = folder:FindFirstChild(tostring(plr.UserId))
+    if byUidName and LooksLikeCharacter(byUidName) then
+        return byUidName, "Characters[UserId-name]"
+    end
+
+    -- 3-6. Per-model inspection
+    for _, m in ipairs(folder:GetChildren()) do
+        if not LooksLikeCharacter(m) then continue end
+
+        -- 3. Attribute UserId/PlayerId/OwnerId
+        local attrUid = m:GetAttribute("UserId")
+            or m:GetAttribute("PlayerId")
+            or m:GetAttribute("OwnerId")
+            or m:GetAttribute("Owner")
+        if attrUid == plr.UserId or attrUid == plr.Name then
+            return m, "Characters[" .. m.Name .. "].attr"
+        end
+
+        -- 4. Child StringValue / ObjectValue
+        for _, child in ipairs(m:GetChildren()) do
+            if child:IsA("StringValue") then
+                local n = child.Name:lower()
+                if (n == "playername" or n == "owner" or n == "player" or n == "username")
+                   and child.Value == plr.Name then
+                    return m, "Characters[" .. m.Name .. "]." .. child.Name
+                end
+            elseif child:IsA("ObjectValue") then
+                if child.Value == plr then
+                    return m, "Characters[" .. m.Name .. "]." .. child.Name
+                end
+            end
+        end
+
+        -- 5. Humanoid DisplayName
+        local hum = m:FindFirstChildOfClass("Humanoid")
+        if hum then
+            if hum.DisplayName == plr.DisplayName
+               or hum.DisplayName == plr.Name
+               or hum.Name == plr.Name then
+                return m, "Characters[" .. m.Name .. "].Humanoid"
+            end
+        end
+
+        -- 6. Name contains player name (min 4 chars, model name must be short enough)
+        if #plr.Name >= 4 and m.Name:find(plr.Name, 1, true) and #m.Name <= #plr.Name + 6 then
+            return m, "Characters[" .. m.Name .. "].contains"
+        end
+    end
+
+    return nil
+end
+
+-- Cached general scan (only used as last resort)
 local function RefreshCharacterMap()
     local now = os.clock()
     if now - CharacterMapTime < CHARACTER_MAP_TTL then return end
     CharacterMapTime = now
 
     local map = {}
-
     local function scan(container, depth)
         if depth > 3 then return end
         local ok, children = pcall(function() return container:GetChildren() end)
         if not ok then return end
         for _, child in ipairs(children) do
+            if SKIP_FOLDERS[child.Name] then continue end
             if child:IsA("Model") then
                 if LooksLikeCharacter(child) then
-                    if not map[child.Name] then
-                        map[child.Name] = child
-                    end
+                    if not map[child.Name] then map[child.Name] = child end
                 end
                 scan(child, depth + 1)
             elseif child:IsA("Folder") then
@@ -137,74 +206,84 @@ local function RefreshCharacterMap()
             end
         end
     end
-
     scan(Workspace, 0)
-
-    -- Also map by UserId attribute
-    for _, child in ipairs(Workspace:GetDescendants()) do
-        if child:IsA("Model") and LooksLikeCharacter(child) then
-            local uid = child:GetAttribute("UserId") or child:GetAttribute("PlayerId") or child:GetAttribute("OwnerId")
-            if uid then
-                map["UID_" .. tostring(uid)] = child
-            end
-        end
-    end
-
     CharacterMap = map
 end
 
--- Layered resolver: returns (character, sourceString)
+-- The resolver, with 0.3s per-player cache
 local function ResolveCharacter(plr)
-    -- 1. Standard Player.Character
+    local now = os.clock()
+    local cached = ESP.ResolverCache[plr]
+    local cachedTime = ESP.ResolverCacheTime[plr] or 0
+    if now - cachedTime < RESOLVER_CACHE_TTL then
+        if cached and cached.Parent then
+            return cached, ESP.ResolverCacheSrc[plr] or "cached"
+        end
+        if cached == false then
+            return nil, ESP.ResolverCacheSrc[plr] or "cached-miss"
+        end
+    end
+
+    local result, source = nil, "unresolved"
+
+    -- Path 1: Player.Character
     if plr.Character then
-        return plr.Character, "Player.Character"
+        result, source = plr.Character, "Player.Character"
     end
 
-    -- 2. Direct child of Workspace by player name
-    local direct = Workspace:FindFirstChild(plr.Name)
-    if direct and LooksLikeCharacter(direct) then
-        return direct, "Workspace." .. plr.Name
+    -- Path 2: Characters folder with all strategies
+    if not result then
+        result, source = TryMatchInCharacters(plr)
     end
 
-    -- 3. Common character folders
-    local commonFolders = {
-        "Characters", "Alive", "Players", "Entities", "Chars",
-        "PlayerCharacters", "GameCharacters", "Live", "Active", "CharacterFolder",
-    }
-    for _, fname in ipairs(commonFolders) do
-        local folder = Workspace:FindFirstChild(fname)
-        if folder then
-            local m = folder:FindFirstChild(plr.Name)
-            if m and LooksLikeCharacter(m) then
-                return m, "Workspace." .. fname .. "." .. plr.Name
+    -- Path 3: Direct Workspace child
+    if not result then
+        local direct = Workspace:FindFirstChild(plr.Name)
+        if direct and LooksLikeCharacter(direct) then
+            result, source = direct, "Workspace." .. plr.Name
+        end
+    end
+
+    -- Path 4: UserId attribute anywhere (cached map)
+    if not result then
+        RefreshCharacterMap()
+        local byUid = CharacterMap[tostring(plr.UserId)]
+        if byUid and byUid.Parent then
+            result, source = byUid, "Cached[UserId-name]"
+        end
+    end
+
+    -- Path 5: Exact name in cached map
+    if not result then
+        local byName = CharacterMap[plr.Name]
+        if byName and byName.Parent then
+            result, source = byName, "Cached[exact-name]"
+        end
+    end
+
+    -- Path 6: SUBSTRING fuzzy, requires 5+ chars in BOTH directions
+    if not result then
+        for name, model in pairs(CharacterMap) do
+            if model.Parent and #name >= 5 and #plr.Name >= 5 then
+                if name:find(plr.Name, 1, true) or plr.Name:find(name, 1, true) then
+                    -- Must be within 4 chars of each other
+                    if math.abs(#name - #plr.Name) <= 4 then
+                        result, source = model, "Fuzzy[" .. name .. "]"
+                        break
+                    end
+                end
             end
         end
     end
 
-    -- 4. Attribute match (UserId / PlayerId / OwnerId) via cached map
-    RefreshCharacterMap()
-    local byUid = CharacterMap["UID_" .. tostring(plr.UserId)]
-    if byUid and byUid.Parent then
-        return byUid, "Attribute UserId"
-    end
+    ESP.ResolverCache[plr] = result or false
+    ESP.ResolverCacheTime[plr] = now
+    ESP.ResolverCacheSrc = ESP.ResolverCacheSrc or {}
+    ESP.ResolverCacheSrc[plr] = source
 
-    -- 5. Cached name map
-    local byName = CharacterMap[plr.Name]
-    if byName and byName.Parent then
-        return byName, "Cached name map"
-    end
-
-    -- 6. Fuzzy substring match (last resort)
-    for name, model in pairs(CharacterMap) do
-        if not name:find("^UID_") and model.Parent then
-            if name:find(plr.Name, 1, true) or plr.Name:find(name, 1, true) then
-                return model, "Fuzzy: " .. name
-            end
-        end
-    end
-
-    return nil, "unresolved"
+    return result, source
 end
+
 
 -----------------------------------------------------
 -- Body utilities
@@ -258,12 +337,22 @@ function PlayerUtils.GetBoundingBox(character)
             max = Vector3.new(math.max(max.X, c.X), math.max(max.Y, c.Y), math.max(max.Z, c.Z))
         end
     end
+
+    -- SANITY CHECK — reject bad matches
+    local dims = max - min
+    if dims.X > ESP.Settings.MaxBoundsStuds
+       or dims.Y > ESP.Settings.MaxBoundsStuds
+       or dims.Z > ESP.Settings.MaxBoundsStuds then
+        return nil
+    end
+    if dims.Magnitude < 0.5 then return nil end
+
     local pad = ESP.Settings.BoundsPadding
     if pad and pad > 0 then
         min = min - Vector3.new(pad, pad, pad)
         max = max + Vector3.new(pad, pad, pad)
     end
-    return { Min = min, Max = max, Character = character }
+    return { Min = min, Max = max, Character = character, Ref = parts[1] }
 end
 
 function PlayerUtils.GetScreenBox(box, camera)
@@ -291,19 +380,31 @@ function PlayerUtils.GetScreenBox(box, camera)
     return minX, minY, maxX, maxY
 end
 
-local BOUNDS_TTL = 0.5
+local BOUNDS_TTL = 0.15       -- tighter than before → box tracks movement
+local BOUNDS_MOVE_EPS = 0.15  -- studs before recompute
 
 function PlayerUtils.GetCachedBoundingBox(character)
     local now = os.clock()
     local cached = ESP.BoundsCache[character]
-    if cached and now - (ESP.BoundsCacheTime[character] or 0) < BOUNDS_TTL then
-        return cached
+    local cachedTime = ESP.BoundsCacheTime[character] or 0
+    local refPos = ESP.BoundsRefPos[character]
+
+    if cached and refPos and now - cachedTime < BOUNDS_TTL then
+        -- If the reference part hasn't moved, reuse
+        if cached.Ref and cached.Ref.Parent and (cached.Ref.Position - refPos).Magnitude < BOUNDS_MOVE_EPS then
+            return cached
+        end
     end
+
     local box = PlayerUtils.GetBoundingBox(character)
     ESP.BoundsCache[character] = box
     ESP.BoundsCacheTime[character] = now
+    if box and box.Ref then
+        ESP.BoundsRefPos[character] = box.Ref.Position
+    end
     return box
 end
+
 
 -----------------------------------------------------
 -- Skeleton links
@@ -328,7 +429,7 @@ local function GetSkeletonLinks(character)
     if character:FindFirstChild("Torso") and character:FindFirstChild("Head") then return R6_LINKS end
     local links, seen = {}, {}
     for _, joint in ipairs(character:GetDescendants()) do
-        if joint:IsA("Motor6D") or joint:IsA("Weld") or joint:IsA("HingeConstraint") or joint:IsA("BallSocketConstraint") then
+        if joint:IsA("Motor6D") or joint:IsA("Weld") then
             local p0, p1 = joint.Part0, joint.Part1
             if p0 and p1 and p0:IsA("BasePart") and p1:IsA("BasePart") then
                 if IsAccessoryPart(p0) or IsAccessoryPart(p1) then continue end
@@ -343,6 +444,7 @@ local function GetSkeletonLinks(character)
     end
     return links
 end
+
 
 -----------------------------------------------------
 -- Drawables
@@ -378,17 +480,12 @@ local function CreateESPCache()
         BackgroundColor3 = Colors.BlackTrans, BackgroundTransparency = BLACK_TRANS,
         BorderSizePixel = 0, Visible = false, ZIndex = 100, Parent = container,
     })
-    local healthInner = Create("Frame", {
-        BackgroundColor3 = Colors.BlackTrans, BackgroundTransparency = 1 - (35 / 255),
-        BorderSizePixel = 0, Position = UDim2.new(0, 1, 0, 1),
-        Size = UDim2.new(1, -2, 1, -2), ZIndex = 100, Parent = healthOuter,
-    })
     local healthFill = Create("Frame", {
         BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 100, Parent = healthOuter,
     })
     local cache = {
         Container = container, Lines = lines, Name = nameLbl, Item = itemLbl,
-        HealthOuter = healthOuter, HealthInner = healthInner, HealthFill = healthFill, LineIndex = 1,
+        HealthOuter = healthOuter, HealthFill = healthFill, LineIndex = 1,
     }
     function cache.Hide()
         for _, l in ipairs(lines) do l.Visible = false end
@@ -435,6 +532,7 @@ local function DrawBorderedRect(cache, x, y, ex, ey, thickness, outCol, outTrans
     DrawRect(cache, ex, y, thickness, ey - y, outCol, outTrans)
 end
 
+
 -----------------------------------------------------
 -- Update
 -----------------------------------------------------
@@ -456,42 +554,40 @@ local function UpdateESP()
         end
 
         local char, source = ResolveCharacter(plr)
-        lastResolveSource[plr] = source
         if not char then
             cache.Container.Visible = false; cache.Hide()
-            lastSkipReason[plr] = "no character (" .. source .. ")"
+            lastSkipReason[plr] = "no char (" .. source .. ")"
             continue
         end
 
         local hum = char:FindFirstChildOfClass("Humanoid")
         if hum and hum.Health <= 0 then
             cache.Container.Visible = false; cache.Hide()
-            lastSkipReason[plr] = "dead (HP=" .. hum.Health .. ")"
+            lastSkipReason[plr] = "dead"
             continue
         end
 
         if ESP.Settings.TeamCheck and plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team then
             cache.Container.Visible = false; cache.Hide()
-            lastSkipReason[plr] = "team check"
+            lastSkipReason[plr] = "team"
             continue
         end
 
         local box3d = PlayerUtils.GetCachedBoundingBox(char)
         if not box3d then
             cache.Container.Visible = false; cache.Hide()
-            lastSkipReason[plr] = "no bounds (no visible parts)"
+            lastSkipReason[plr] = "no bounds / bad match"
             continue
         end
 
         local minX, minY, maxX, maxY = PlayerUtils.GetScreenBox(box3d, camera)
         if not minX or maxX <= minX or maxY <= minY then
             cache.Container.Visible = false; cache.Hide()
-            lastSkipReason[plr] = "offscreen/behind"
+            lastSkipReason[plr] = "offscreen"
             continue
         end
 
         lastSkipReason[plr] = nil
-
         cache.Container.Visible = true
         cache.LineIndex = 1
         cache.Name.Visible = false; cache.Item.Visible = false; cache.HealthOuter.Visible = false
@@ -561,66 +657,59 @@ local function UpdateESP()
     end
 end
 
+
 -----------------------------------------------------
--- Diagnostic (shows where characters live)
+-- Diagnostic
 -----------------------------------------------------
 function ESP:Diagnose()
-    print("════════ ESP DIAGNOSTIC ════════")
+    print("════════ ESP DIAGNOSTIC V5 ════════")
     print("Enabled:", ESP.Settings.Enabled)
-    print("ScreenGui Parent:", sg.Parent and sg.Parent:GetFullName() or "NIL!")
 
-    -- Dump top-level Workspace structure
-    print("Workspace top-level children:")
-    for _, child in ipairs(Workspace:GetChildren()) do
-        local class = child.ClassName
-        local count = 0
-        if child:IsA("Folder") or child:IsA("Model") then
-            local ok, c = pcall(function() return #child:GetChildren() end)
-            if ok then count = c end
+    local chars = Workspace:FindFirstChild("Characters")
+    if chars then
+        print("Characters folder contents:")
+        for _, m in ipairs(chars:GetChildren()) do
+            local hum = m:FindFirstChildOfClass("Humanoid")
+            local attrs = m:GetAttributes()
+            local attrStr = ""
+            for k, v in pairs(attrs) do attrStr = attrStr .. k .. "=" .. tostring(v) .. " " end
+            local parts = 0
+            if m:IsA("Model") then
+                for _, d in ipairs(m:GetDescendants()) do
+                    if d:IsA("BasePart") then parts = parts + 1 end
+                end
+            end
+            print(string.format("  '%s' (%s) hum=%s parts=%d attrs={%s}",
+                m.Name, m.ClassName, hum and "yes" or "no", parts, attrStr))
         end
-        print(string.format("  %s (%s) children=%d", child.Name, class, count))
+    else
+        print("No 'Characters' folder found!")
     end
 
     print("Total players:", #Players:GetPlayers())
     for _, plr in ipairs(Players:GetPlayers()) do
-        if plr == LocalPlayer then
-            print("  [SELF] " .. plr.Name)
-            continue
-        end
+        if plr == LocalPlayer then print("  [SELF] " .. plr.Name); continue end
         local char, source = ResolveCharacter(plr)
         if not char then
-            print(string.format("  [%s] NOT FOUND (Player.Character=%s, source=%s)",
-                plr.Name, tostring(plr.Character), source))
+            print(string.format("  [%s] NOT FOUND (%s)", plr.Name, source))
             continue
         end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        local parts = PlayerUtils.GetBodyParts(char)
-        print(string.format("  [%s] FOUND via %s | parts=%d | hp=%s",
-            plr.Name, source, #parts,
-            hum and tostring(hum.Health) or "no-hum"))
-        if #parts > 0 then
-            local box = PlayerUtils.GetBoundingBox(char)
-            if box then
-                local minX, minY, maxX, maxY = PlayerUtils.GetScreenBox(box, Workspace.CurrentCamera)
-                if minX then
-                    print(string.format("    → Screen: (%.0f,%.0f)-(%.0f,%.0f) size %.0fx%.0f",
-                        minX, minY, maxX, maxY, maxX - minX, maxY - minY))
-                else
-                    print("    → Offscreen")
-                end
-            end
+        local box = PlayerUtils.GetCachedBoundingBox(char)
+        if not box then
+            print(string.format("  [%s] FOUND via %s, but BOUNDS rejected (bad match)", plr.Name, source))
+            continue
         end
-        local reason = lastSkipReason[plr]
-        if reason then print("    → skip: " .. reason) else print("    → DRAWN") end
+        local dim = box.Max - box.Min
+        local minX, minY, maxX, maxY = PlayerUtils.GetScreenBox(box, Workspace.CurrentCamera)
+        local screenStr = minX and string.format("(%.0f,%.0f)-(%.0f,%.0f)", minX, minY, maxX, maxY) or "offscreen"
+        print(string.format("  [%s] via %s | box=%.1fx%.1fx%.1f | %s",
+            plr.Name, source, dim.X, dim.Y, dim.Z, screenStr))
     end
     print("════════════════════════════════")
 end
 
 _G.ESP = ESP
 
------------------------------------------------------
--- Loops
------------------------------------------------------
 local errorCount = 0
 local lastEnabled = nil
 
@@ -652,5 +741,5 @@ task.spawn(function()
     end
 end)
 
-print("[Exhibition ESP] Loaded. Toggle Enabled — resolver will find Workspace characters.")
+print("[Exhibition ESP] Loaded. V5 resolver + fast bounds.")
 return ESP
