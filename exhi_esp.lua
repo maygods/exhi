@@ -4,13 +4,12 @@
     Uses real AABB bounds computed from character parts instead of a fixed box.
     Skeleton is joint-driven, so it works for custom rigs too.
 
-    FIX NOTES vs previous version:
-      - Container is a Frame (GuiObject) not a Folder, so .Visible works.
-      - All drawables start hidden; stale lines are cleared every frame.
-      - Default IncludeAccessories = false to match original behaviour.
-      - Added pcall guards around CoreGui access.
-      - Added sg.DisplayOrder so other GUIs don't cover it.
-      - Added print on load so you can confirm the module is the new one.
+    FIX NOTES:
+      - ScreenGui is parented to CoreGui directly (RobloxGui filters user GUIs).
+      - Container is a full-size Frame so children render reliably.
+      - Errors are surfaced once, not silently swallowed by pcall.
+      - Label positioning uses AnchorPoint instead of TextBounds races.
+      - Debug print confirms the render loop is connected and Enabled updates.
 ]]
 
 local Players = game:GetService("Players")
@@ -18,7 +17,6 @@ local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
 
 local ESP = {
     Settings = {
@@ -45,7 +43,9 @@ local ESP = {
 
 print("[Exhibition ESP] Loading dynamic ESP module...")
 
--- ScreenGui with high DisplayOrder so it renders above game UI
+-----------------------------------------------------
+-- ScreenGui setup — the fix
+-----------------------------------------------------
 local sg = Instance.new("ScreenGui")
 local charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 local randName = ""
@@ -57,27 +57,43 @@ sg.DisplayOrder = 100
 sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 pcall(function() if syn and syn.protect_gui then syn.protect_gui(sg) end end)
 
-local targetParent
+-- Parent to CoreGui directly, fall back to PlayerGui if CoreGui is read-only.
+local parentName = "nil"
 do
-    local ok, gui = pcall(function() return CoreGui:FindFirstChild("RobloxGui") end)
-    if ok and gui then
-        targetParent = gui
+    local okCore = pcall(function()
+        sg.Parent = CoreGui
+    end)
+    if okCore and sg.Parent == CoreGui then
+        parentName = "CoreGui"
     else
-        targetParent = LocalPlayer:WaitForChild("PlayerGui")
+        local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 10)
+        if pg then
+            local okPg = pcall(function() sg.Parent = pg end)
+            if okPg and sg.Parent == pg then
+                parentName = "PlayerGui"
+            end
+        end
     end
 end
 
-local modulesFolder = targetParent:FindFirstChild("Modules")
-if not modulesFolder then
-    modulesFolder = Instance.new("Folder")
-    modulesFolder.Name = "Modules"
-    modulesFolder.Parent = targetParent
+if not sg.Parent then
+    warn("[Exhibition ESP] Could not find a valid parent for ScreenGui. ESP disabled.")
+    ESP.Settings.Enabled = false
+    return ESP
 end
-sg.Parent = modulesFolder
 
+print("[Exhibition ESP] ScreenGui parented to: " .. parentName)
+
+-- Guard against deletion by other scripts
 sg.AncestryChanged:Connect(function(_, parent)
-    if not parent and sg.Parent ~= modulesFolder then
-        task.defer(function() pcall(function() sg.Parent = modulesFolder end) end)
+    if not parent then
+        task.defer(function()
+            local ok = pcall(function() sg.Parent = CoreGui end)
+            if not ok or not sg.Parent then
+                local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+                if pg then pcall(function() sg.Parent = pg end) end
+            end
+        end)
     end
 end)
 
@@ -198,7 +214,7 @@ function PlayerUtils.GetScreenBox(box, camera)
     local minX, minY, maxX, maxY = 1e9, 1e9, -1e9, -1e9
     local any = false
     for _, c in ipairs(corners) do
-        local screen, _ = camera:WorldToViewportPoint(c)
+        local screen = camera:WorldToViewportPoint(c)
         if screen.Z > 0 then
             any = true
             minX = math.min(minX, screen.X)
@@ -232,7 +248,7 @@ end
 
 
 -----------------------------------------------------
--- Skeleton graph (works for any rig)
+-- Skeleton graph
 -----------------------------------------------------
 local R6_LINKS = {
     { "Head", "Torso" },
@@ -269,7 +285,6 @@ local function GetSkeletonLinks(character)
     if hasR15 then return R15_LINKS end
     if hasR6 then return R6_LINKS end
 
-    -- Custom rig: joint-based graph
     local links = {}
     local seen = {}
     for _, joint in ipairs(character:GetDescendants()) do
@@ -288,7 +303,6 @@ local function GetSkeletonLinks(character)
     end
     if #links > 0 then return links end
 
-    -- Last resort: nearest-neighbour chain
     local parts = PlayerUtils.GetBodyParts(character)
     if #parts <= 1 then return {} end
     local connected = { [parts[1]] = true }
@@ -321,31 +335,27 @@ end
 -----------------------------------------------------
 local LINE_POOL_SIZE = 120
 
-local function DrawLine(parent, x, y, w, h)
-    return Create("Frame", {
-        BackgroundColor3 = Color3.new(1, 1, 1),
-        BackgroundTransparency = 0,
-        BorderSizePixel = 0,
-        Position = UDim2.new(0, x, 0, y),
-        Size = UDim2.new(0, math.max(1, w), 0, math.max(1, h)),
-        Visible = false,
-        Parent = parent,
-    })
-end
-
 local function CreateESPCache()
-    -- Use a Frame (GuiObject) so .Visible works.
+    -- Full-size transparent container: guarantees children render.
     local container = Create("Frame", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Size = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(1, 0, 1, 0),
         Visible = false,
         Parent = sg,
     })
 
     local lines = {}
     for i = 1, LINE_POOL_SIZE do
-        table.insert(lines, DrawLine(container, 0, 0, 1, 1))
+        table.insert(lines, Create("Frame", {
+            BackgroundColor3 = Color3.new(1, 1, 1),
+            BackgroundTransparency = 0,
+            BorderSizePixel = 0,
+            Position = UDim2.new(0, 0, 0, 0),
+            Size = UDim2.new(0, 1, 0, 1),
+            Visible = false,
+            Parent = container,
+        }))
     end
 
     local nameLbl = Create("TextLabel", {
@@ -356,6 +366,7 @@ local function CreateESPCache()
         TextStrokeColor3 = Color3.fromRGB(0, 0, 0),
         TextStrokeTransparency = 1 - (190 / 255),
         Size = UDim2.new(0, 200, 0, 16),
+        AnchorPoint = Vector2.new(0.5, 1),
         Visible = false,
         Parent = container,
     })
@@ -368,6 +379,7 @@ local function CreateESPCache()
         TextStrokeColor3 = Color3.fromRGB(0, 0, 0),
         TextStrokeTransparency = 1 - (190 / 255),
         Size = UDim2.new(0, 200, 0, 14),
+        AnchorPoint = Vector2.new(0.5, 0),
         Visible = false,
         Parent = container,
     })
@@ -427,19 +439,18 @@ local function DrawRect(cache, x, y, w, h, col, trans)
     l.BackgroundColor3 = col
     l.BackgroundTransparency = trans or 0
     l.Rotation = 0
-    l.BorderSizePixel = 0
     cache.LineIndex = cache.LineIndex + 1
 end
 
 local function DrawRotatedLine(cache, p1, p2, color, thickness)
     local l = cache.Lines[cache.LineIndex]
     if not l then return end
-    l.Visible = true
     local distance = (p1 - p2).Magnitude
-    if distance < 0.1 then
+    if distance < 0.5 then
         cache.LineIndex = cache.LineIndex + 1
         return
     end
+    l.Visible = true
     local center = (p1 + p2) / 2
     local angle = math.atan2(p2.Y - p1.Y, p2.X - p1.X)
     l.Size = UDim2.new(0, distance, 0, thickness or 1)
@@ -447,7 +458,6 @@ local function DrawRotatedLine(cache, p1, p2, color, thickness)
     l.Rotation = math.deg(angle)
     l.BackgroundColor3 = color
     l.BackgroundTransparency = 0
-    l.BorderSizePixel = 0
     cache.LineIndex = cache.LineIndex + 1
 end
 
@@ -513,7 +523,6 @@ local function UpdateESP()
                 continue
             end
 
-            -- We have something to draw
             cache.Container.Visible = true
             cache.LineIndex = 1
             cache.Name.Visible = false
@@ -564,15 +573,9 @@ local function UpdateESP()
             -- Name
             if ESP.Settings.Names then
                 cache.Name.Visible = true
-                cache.Name.Text = plr.DisplayName ~= "" and plr.DisplayName or plr.Name
-                if ESP.Settings.TeamColors then
-                    cache.Name.TextColor3 = color
-                else
-                    cache.Name.TextColor3 = Color3.new(1, 1, 1)
-                end
-                cache.Name.Size = UDim2.new(0, math.max(50, (endx - x) + 40), 0, 16)
-                local txtSize = cache.Name.TextBounds
-                cache.Name.Position = UDim2.new(0, x + (endx - x) / 2 - cache.Name.Size.X.Offset / 2, 0, y - txtSize.Y - 3)
+                cache.Name.Text = (plr.DisplayName ~= "" and plr.DisplayName) or plr.Name
+                cache.Name.TextColor3 = ESP.Settings.TeamColors and color or Color3.new(1, 1, 1)
+                cache.Name.Position = UDim2.new(0, x + (endx - x) / 2, 0, y - 3)
             end
 
             -- Items
@@ -581,8 +584,7 @@ local function UpdateESP()
                 if tool then
                     cache.Item.Visible = true
                     cache.Item.Text = tool.Name
-                    cache.Item.Size = UDim2.new(0, math.max(50, (endx - x) + 40), 0, 14)
-                    cache.Item.Position = UDim2.new(0, x + (endx - x) / 2 - cache.Item.Size.X.Offset / 2, 0, endy + 3)
+                    cache.Item.Position = UDim2.new(0, x + (endx - x) / 2, 0, endy + 3)
                 end
             end
 
@@ -602,7 +604,6 @@ local function UpdateESP()
                 end
             end
 
-            -- Hide any lines we didn't reuse this frame
             cache.HideFrom(cache.LineIndex)
         end
     end
@@ -610,22 +611,44 @@ end
 
 
 -----------------------------------------------------
--- Lifecycle
+-- Render loop with visible error reporting
 -----------------------------------------------------
+local warned = false
+local lastEnabled = nil
+local frames = 0
+
 RunService.RenderStepped:Connect(function()
-    pcall(UpdateESP)
+    frames = frames + 1
+
+    -- Confirm the loop is actually running
+    if frames == 60 then
+        print("[Exhibition ESP] Render loop running for ~1 second. Enabled:", ESP.Settings.Enabled,
+            "| Cached players:", #Players:GetPlayers())
+    end
+
+    -- Confirm the toggle callback is actually flipping our setting
+    if ESP.Settings.Enabled ~= lastEnabled then
+        print("[Exhibition ESP] Enabled changed to:", ESP.Settings.Enabled)
+        lastEnabled = ESP.Settings.Enabled
+    end
+
+    local ok, err = pcall(UpdateESP)
+    if not ok and not warned then
+        warned = true
+        warn("[Exhibition ESP] UpdateESP error (won't repeat): " .. tostring(err))
+    end
 end)
 
+-- Cleanup
 task.spawn(function()
     while true do
-        task.wait(0.1)
+        task.wait(0.5)
         for plr, cache in pairs(ESP.Cache) do
             if not plr or not plr.Parent then
                 if cache and cache.Container then pcall(function() cache.Container:Destroy() end) end
                 ESP.Cache[plr] = nil
             end
         end
-        -- Sweep stale bounds caches for characters no longer in the world
         for char in pairs(ESP.BoundsCache) do
             if not char or not char.Parent then
                 ESP.BoundsCache[char] = nil
