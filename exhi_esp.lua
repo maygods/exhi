@@ -1,11 +1,10 @@
 --[[
-    Exhibition Dynamic ESP  —  ESP_VERSION_7_CLEANUP
+    Exhibition Dynamic ESP  —  ESP_VERSION_8_DEATH
     Fixes:
-      - Orphan boxes now hide when their model leaves Characters/ or dies.
-      - Touch-set tracking: only draw caches present this frame.
-      - Death attribute detection (Dead / IsDead / Health=0 / Ragdoll).
-      - Cache cleanup for orphan models that get destroyed.
-      - Everything from v6 (resolver, sanity checks, spawn log) preserved.
+      - Position-based ragdoll matching (name-independent)
+      - Fall + stuck watchdog catches corpses in-place
+      - Orphan cache count diagnostic corrected
+      - ESP:InspectModel now shows motion history + death detection internals
 ]]
 
 local Players = game:GetService("Players")
@@ -30,20 +29,22 @@ local ESP = {
         MaxBoundsStuds = 40,
         ShowUnknownCharacters = true,
         HideDeadOrphans = true,
+        DeadFallThreshold = 0.4,     -- UpVector.Y below this = fallen
+        DeadStuckSeconds = 1.5,      -- seconds without movement while fallen = dead
+        RagdollProximity = 4,        -- studs — corpse match radius
     },
-    Cache = {},
-    OrphanCache = {},
-    BoundsCache = {},
-    BoundsCacheTime = {},
-    BoundsRefPos = {},
-    ResolverCache = {},
-    ResolverCacheTime = {},
-    ResolverCacheSrc = {},
+    Cache = {}, OrphanCache = {},
+    BoundsCache = {}, BoundsCacheTime = {}, BoundsRefPos = {},
+    ResolverCache = {}, ResolverCacheTime = {}, ResolverCacheSrc = {},
     CharacterSpawnLog = {},
+    MotionHistory = {},          -- model -> { LastPos, LastMoveTime, FallStartTime }
 }
 
-print("[Exhibition ESP] Loading ESP_VERSION_7_CLEANUP...")
+print("[Exhibition ESP] Loading ESP_VERSION_8_DEATH...")
 
+-----------------------------------------------------
+-- ScreenGui
+-----------------------------------------------------
 local sg = Instance.new("ScreenGui")
 local charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 local randName = ""
@@ -63,9 +64,8 @@ if not modulesFolder then
     modulesFolder.Parent = targetParent
 end
 sg.Parent = modulesFolder
-
-sg.AncestryChanged:Connect(function(_, parent)
-    if not parent and sg.Parent ~= modulesFolder then
+sg.AncestryChanged:Connect(function(_, p)
+    if not p and sg.Parent ~= modulesFolder then
         task.defer(function() pcall(function() sg.Parent = modulesFolder end) end)
     end
 end)
@@ -77,9 +77,9 @@ local Colors = {
 local BLACK_TRANS = 1 - (150 / 255)
 
 local function Create(cls, props)
-    local inst = Instance.new(cls)
-    for k, v in pairs(props or {}) do inst[k] = v end
-    return inst
+    local i = Instance.new(cls)
+    for k, v in pairs(props or {}) do i[k] = v end
+    return i
 end
 
 local function GetPlayerColor(plr)
@@ -90,39 +90,116 @@ local function GetPlayerColor(plr)
 end
 
 local function BlendColors(progress)
-    if progress >= 0.5 then
-        return Colors.Yellow:Lerp(Colors.Green, (progress - 0.5) * 2)
-    else
-        return Colors.Red:Lerp(Colors.Yellow, progress * 2)
-    end
+    if progress >= 0.5 then return Colors.Yellow:Lerp(Colors.Green, (progress - 0.5) * 2) end
+    return Colors.Red:Lerp(Colors.Yellow, progress * 2)
 end
 
 
 -----------------------------------------------------
--- CharacterSpawnLog
+-- Spawn log
 -----------------------------------------------------
-local function HookPlayerForSpawns(plr)
-    plr.CharacterAdded:Connect(function(char)
-        ESP.CharacterSpawnLog[plr] = char
-    end)
+for _, plr in ipairs(Players:GetPlayers()) do
+    plr.CharacterAdded:Connect(function(c) ESP.CharacterSpawnLog[plr] = c end)
     if plr.Character then ESP.CharacterSpawnLog[plr] = plr.Character end
 end
-
-for _, plr in ipairs(Players:GetPlayers()) do HookPlayerForSpawns(plr) end
-Players.PlayerAdded:Connect(HookPlayerForSpawns)
+Players.PlayerAdded:Connect(function(plr)
+    plr.CharacterAdded:Connect(function(c) ESP.CharacterSpawnLog[plr] = c end)
+end)
 
 
 -----------------------------------------------------
 -- Death detection
 -----------------------------------------------------
--- Looks at attributes and value objects to detect "this rig is dead."
--- Also checks for Humanoid.Health = 0 if present.
-local function IsModelDead(model)
-    -- Humanoid (if any)
-    local hum = model:FindFirstChildOfClass("Humanoid")
-    if hum and hum.Health <= 0 then return true end
+local RAGDOLL_FOLDERS = { "Ragdolls", "DeadBodies", "Corpses", "Dead" }
 
-    -- Common death attributes
+-- Find ANY model in ragdoll folders within proximity of this model
+local function FindNearbyRagdoll(model)
+    local mpos
+    local ok, pivot = pcall(function() return model:GetPivot().Position end)
+    if ok and pivot then mpos = pivot
+    elseif model.PrimaryPart then mpos = model.PrimaryPart.Position end
+    if not mpos then return false end
+
+    local prox = ESP.Settings.RagdollProximity
+    for _, fname in ipairs(RAGDOLL_FOLDERS) do
+        local folder = Workspace:FindFirstChild(fname)
+        if folder then
+            for _, r in ipairs(folder:GetChildren()) do
+                if r:IsA("Model") then
+                    local rpos
+                    local ok2, rp = pcall(function() return r:GetPivot().Position end)
+                    if ok2 and rp then rpos = rp
+                    elseif r.PrimaryPart then rpos = r.PrimaryPart.Position end
+                    if rpos and (mpos - rpos).Magnitude <= prox then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- Get a "reference" part for motion tracking
+local function GetRefPart(model)
+    if model.PrimaryPart then return model.PrimaryPart end
+    local hrp = model:FindFirstChild("HumanoidRootPart")
+    if hrp then return hrp end
+    local head = model:FindFirstChild("Head")
+    if head then return head end
+    for _, d in ipairs(model:GetDescendants()) do
+        if d:IsA("BasePart") then return d end
+    end
+    return nil
+end
+
+-- Fall + stuck watchdog
+local function IsCorpseByMotion(model)
+    local ref = GetRefPart(model)
+    if not ref then return false end
+
+    local now = os.clock()
+    local hist = ESP.MotionHistory[model]
+    if not hist then
+        ESP.MotionHistory[model] = {
+            LastPos = ref.Position,
+            LastMoveTime = now,
+            FallStartTime = nil,
+        }
+        return false
+    end
+
+    -- Detect movement
+    local moved = (ref.Position - hist.LastPos).Magnitude > 0.5
+    if moved then
+        hist.LastPos = ref.Position
+        hist.LastMoveTime = now
+        hist.FallStartTime = nil
+        return false
+    end
+
+    -- Check fallen state
+    local up = ref.CFrame.UpVector
+    local fallen = up.Y < ESP.Settings.DeadFallThreshold
+    if not fallen then
+        hist.FallStartTime = nil
+        return false
+    end
+
+    -- Fallen + stuck for threshold seconds = corpse
+    if not hist.FallStartTime then
+        hist.FallStartTime = now
+        return false
+    end
+
+    return (now - hist.FallStartTime) >= ESP.Settings.DeadStuckSeconds
+end
+
+-- Attribute / value child / name based death check
+local function IsModelDead(model)
+    local hum = model:FindFirstChildOfClass("Humanoid")
+    if hum and hum.Health <= 0 then return true, "humanoid" end
+
     local deathAttrs = {
         "Dead", "IsDead", "Death", "Died", "Ragdoll", "IsRagdoll",
         "Alive", "IsAlive", "Health", "HP",
@@ -131,54 +208,48 @@ local function IsModelDead(model)
         local ok, val = pcall(function() return model:GetAttribute(attrName) end)
         if ok and val ~= nil then
             if type(val) == "boolean" then
-                if (attrName == "Alive" or attrName == "IsAlive") and val == false then return true end
-                if (attrName == "Dead" or attrName == "IsDead" or attrName == "Died" or attrName == "Ragdoll" or attrName == "IsRagdoll") and val == true then return true end
+                if (attrName == "Alive" or attrName == "IsAlive") and val == false then return true, "attr " .. attrName end
+                if (attrName == "Dead" or attrName == "IsDead" or attrName == "Died" or attrName == "Ragdoll" or attrName == "IsRagdoll") and val == true then return true, "attr " .. attrName end
             elseif type(val) == "number" then
-                if (attrName == "Health" or attrName == "HP") and val <= 0 then return true end
+                if (attrName == "Health" or attrName == "HP") and val <= 0 then return true, "attr " .. attrName .. "=" .. val end
             end
         end
     end
 
-    -- Value children
     for _, child in ipairs(model:GetChildren()) do
         if child:IsA("BoolValue") then
             local n = child.Name:lower()
-            if (n:find("dead") or n:find("ragdoll")) and child.Value then return true end
-            if n:find("alive") and not child.Value then return true end
+            if (n:find("dead") or n:find("ragdoll")) and child.Value then return true, "BoolValue " .. child.Name end
+            if n:find("alive") and not child.Value then return true, "BoolValue " .. child.Name end
         elseif child:IsA("NumberValue") then
             local n = child.Name:lower()
-            if (n == "health" or n == "hp") and child.Value <= 0 then return true end
+            if (n == "health" or n == "hp") and child.Value <= 0 then return true, "NumberValue " .. child.Name end
         end
     end
 
-    -- Model name indicates dead state
     local n = model.Name:lower()
-    if n:find("dead") or n:find("ragdoll") or n:find("corpse") then return true end
+    if n:find("dead") or n:find("ragdoll") or n:find("corpse") then return true, "name" end
 
-    return false
+    return false, nil
 end
 
--- Check if a similarly-named model exists in a Ragdolls/DeadBodies folder.
--- If so, the Characters/ version is almost certainly a dead state.
-local function HasRagdollTwin(model)
-    if not model.Name or model.Name == "" then return false end
-    local ragdollFolders = { "Ragdolls", "DeadBodies", "Corpses", "Dead" }
-    for _, fname in ipairs(ragdollFolders) do
-        local folder = Workspace:FindFirstChild(fname)
-        if folder then
-            local twin = folder:FindFirstChild(model.Name)
-            if twin then return true end
-        end
-    end
-    return false
+-- Combined: is this orphan model dead?
+local function IsOrphanDead(model)
+    local byAttr, reason = IsModelDead(model)
+    if byAttr then return true, reason end
+
+    if FindNearbyRagdoll(model) then return true, "nearby ragdoll" end
+
+    if IsCorpseByMotion(model) then return true, "fallen+stuck" end
+
+    return false, nil
 end
 
 
 -----------------------------------------------------
--- Resolver (unchanged from v6)
+-- Resolver (unchanged from v7)
 -----------------------------------------------------
 local SKIP_FOLDERS = { Debris = true, Ragdolls = true, Effects = true, Particles = true, Fx = true, VFX = true }
-
 local CharacterMap = {}
 local CharacterMapTime = 0
 local CHARACTER_MAP_TTL = 4.0
@@ -196,27 +267,22 @@ end
 local function TryMatchInCharacters(plr)
     local folder = Workspace:FindFirstChild("Characters")
     if not folder then return nil, nil end
-
     local byName = folder:FindFirstChild(plr.Name)
     if byName and LooksLikeCharacter(byName) then return byName, "Characters[exact]" end
-
-    local byUidName = folder:FindFirstChild(tostring(plr.UserId))
-    if byUidName and LooksLikeCharacter(byUidName) then return byUidName, "Characters[UserId]" end
-
+    local byUid = folder:FindFirstChild(tostring(plr.UserId))
+    if byUid and LooksLikeCharacter(byUid) then return byUid, "Characters[UserId]" end
     for _, m in ipairs(folder:GetChildren()) do
         if not LooksLikeCharacter(m) then continue end
         local attrUid = m:GetAttribute("UserId") or m:GetAttribute("PlayerId") or m:GetAttribute("OwnerId") or m:GetAttribute("Owner")
-        if attrUid == plr.UserId or attrUid == plr.Name then
-            return m, "Characters[" .. m.Name .. "].attr"
-        end
-        for _, child in ipairs(m:GetChildren()) do
-            if child:IsA("StringValue") then
-                local n = child.Name:lower()
-                if (n:find("player") or n == "owner" or n == "username") and child.Value == plr.Name then
-                    return m, "Characters[" .. m.Name .. "]." .. child.Name
+        if attrUid == plr.UserId or attrUid == plr.Name then return m, "Characters[" .. m.Name .. "].attr" end
+        for _, c in ipairs(m:GetChildren()) do
+            if c:IsA("StringValue") then
+                local n = c.Name:lower()
+                if (n:find("player") or n == "owner" or n == "username") and c.Value == plr.Name then
+                    return m, "Characters[" .. m.Name .. "]." .. c.Name
                 end
-            elseif child:IsA("ObjectValue") and child.Value == plr then
-                return m, "Characters[" .. m.Name .. "]." .. child.Name
+            elseif c:IsA("ObjectValue") and c.Value == plr then
+                return m, "Characters[" .. m.Name .. "]." .. c.Name
             end
         end
         local hum = m:FindFirstChildOfClass("Humanoid")
@@ -237,18 +303,16 @@ local function RefreshCharacterMap()
     if now - CharacterMapTime < CHARACTER_MAP_TTL then return end
     CharacterMapTime = now
     local map = {}
-    local function scan(container, depth)
-        if depth > 3 then return end
-        local ok, children = pcall(function() return container:GetChildren() end)
+    local function scan(c, d)
+        if d > 3 then return end
+        local ok, children = pcall(function() return c:GetChildren() end)
         if not ok then return end
-        for _, child in ipairs(children) do
-            if SKIP_FOLDERS[child.Name] then continue end
-            if child:IsA("Model") then
-                if LooksLikeCharacter(child) and not map[child.Name] then map[child.Name] = child end
-                scan(child, depth + 1)
-            elseif child:IsA("Folder") then
-                scan(child, depth + 1)
-            end
+        for _, ch in ipairs(children) do
+            if SKIP_FOLDERS[ch.Name] then continue end
+            if ch:IsA("Model") then
+                if LooksLikeCharacter(ch) and not map[ch.Name] then map[ch.Name] = ch end
+                scan(ch, d + 1)
+            elseif ch:IsA("Folder") then scan(ch, d + 1) end
         end
     end
     scan(Workspace, 0)
@@ -258,16 +322,13 @@ end
 local function ResolveCharacter(plr)
     local now = os.clock()
     local cached = ESP.ResolverCache[plr]
-    local cachedTime = ESP.ResolverCacheTime[plr] or 0
-    if now - cachedTime < RESOLVER_CACHE_TTL then
+    local ct = ESP.ResolverCacheTime[plr] or 0
+    if now - ct < RESOLVER_CACHE_TTL then
         if cached and typeof(cached) == "Instance" and cached.Parent then
             return cached, ESP.ResolverCacheSrc[plr] or "cached"
         end
-        if cached == false then
-            return nil, tostring(ESP.ResolverCacheSrc[plr] or "cached-miss")
-        end
+        if cached == false then return nil, tostring(ESP.ResolverCacheSrc[plr] or "cached-miss") end
     end
-
     local result, source = nil, "unresolved"
     if plr.Character then result, source = plr.Character, "Player.Character" end
     if not result then
@@ -301,7 +362,6 @@ local function ResolveCharacter(plr)
             end
         end
     end
-
     ESP.ResolverCache[plr] = result or false
     ESP.ResolverCacheTime[plr] = now
     ESP.ResolverCacheSrc[plr] = source or "unresolved"
@@ -310,18 +370,14 @@ end
 
 
 -----------------------------------------------------
--- Bounds
+-- Bounds + drawables
 -----------------------------------------------------
 local PlayerUtils = {}
 
-local function IsAccessoryPart(part)
-    return part:FindFirstAncestorWhichIsA("Accessory") ~= nil
-        or part:FindFirstAncestorWhichIsA("Accoutrement") ~= nil
+local function IsAccessoryPart(p)
+    return p:FindFirstAncestorWhichIsA("Accessory") ~= nil or p:FindFirstAncestorWhichIsA("Accoutrement") ~= nil
 end
-
-local function IsToolPart(part)
-    return part:FindFirstAncestorWhichIsA("Tool") ~= nil
-end
+local function IsToolPart(p) return p:FindFirstAncestorWhichIsA("Tool") ~= nil end
 
 function PlayerUtils.GetBodyParts(character)
     local parts = {}
@@ -363,10 +419,7 @@ function PlayerUtils.GetBoundingBox(character)
     if dims.X > ESP.Settings.MaxBoundsStuds or dims.Y > ESP.Settings.MaxBoundsStuds or dims.Z > ESP.Settings.MaxBoundsStuds then return nil end
     if dims.Magnitude < 0.5 then return nil end
     local pad = ESP.Settings.BoundsPadding
-    if pad and pad > 0 then
-        min = min - Vector3.new(pad, pad, pad)
-        max = max + Vector3.new(pad, pad, pad)
-    end
+    if pad and pad > 0 then min = min - Vector3.new(pad, pad, pad); max = max + Vector3.new(pad, pad, pad) end
     return { Min = min, Max = max, Character = character, Ref = parts[1] }
 end
 
@@ -399,10 +452,10 @@ local BOUNDS_MOVE_EPS = 0.08
 function PlayerUtils.GetCachedBoundingBox(character)
     local now = os.clock()
     local cached = ESP.BoundsCache[character]
-    local cachedTime = ESP.BoundsCacheTime[character] or 0
-    local refPos = ESP.BoundsRefPos[character]
-    if cached and refPos and now - cachedTime < BOUNDS_TTL then
-        if cached.Ref and cached.Ref.Parent and (cached.Ref.Position - refPos).Magnitude < BOUNDS_MOVE_EPS then
+    local ct = ESP.BoundsCacheTime[character] or 0
+    local rp = ESP.BoundsRefPos[character]
+    if cached and rp and now - ct < BOUNDS_TTL then
+        if cached.Ref and cached.Ref.Parent and (cached.Ref.Position - rp).Magnitude < BOUNDS_MOVE_EPS then
             return cached
         end
     end
@@ -413,11 +466,7 @@ function PlayerUtils.GetCachedBoundingBox(character)
     return box
 end
 
-
------------------------------------------------------
--- Drawables
------------------------------------------------------
-local LINE_POOL_SIZE = 120
+local LINE_POOL = 120
 
 local function CreateESPCache()
     local container = Create("Frame", {
@@ -425,11 +474,10 @@ local function CreateESPCache()
         Size = UDim2.new(1, 0, 1, 0), Visible = false, ZIndex = 100, Parent = sg,
     })
     local lines = {}
-    for i = 1, LINE_POOL_SIZE do
+    for i = 1, LINE_POOL do
         table.insert(lines, Create("Frame", {
             BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0,
-            BorderSizePixel = 0, Position = UDim2.new(0, 0, 0, 0),
-            Size = UDim2.new(0, 1, 0, 1), Visible = false, ZIndex = 100, Parent = container,
+            BorderSizePixel = 0, Size = UDim2.new(0, 1, 0, 1), Visible = false, ZIndex = 100, Parent = container,
         }))
     end
     local nameLbl = Create("TextLabel", {
@@ -437,12 +485,6 @@ local function CreateESPCache()
         TextColor3 = Color3.new(1, 1, 1), TextStrokeColor3 = Color3.new(0, 0, 0),
         TextStrokeTransparency = 1 - (190 / 255), Size = UDim2.new(0, 200, 0, 16),
         AnchorPoint = Vector2.new(0.5, 1), Visible = false, ZIndex = 101, Parent = container,
-    })
-    local itemLbl = Create("TextLabel", {
-        BackgroundTransparency = 1, Font = Enum.Font.SourceSans, TextSize = 12,
-        TextColor3 = Color3.new(1, 1, 1), TextStrokeColor3 = Color3.new(0, 0, 0),
-        TextStrokeTransparency = 1 - (190 / 255), Size = UDim2.new(0, 200, 0, 14),
-        AnchorPoint = Vector2.new(0.5, 0), Visible = false, ZIndex = 101, Parent = container,
     })
     local healthOuter = Create("Frame", {
         BackgroundColor3 = Colors.BlackTrans, BackgroundTransparency = BLACK_TRANS,
@@ -452,56 +494,50 @@ local function CreateESPCache()
         BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 100, Parent = healthOuter,
     })
     local cache = {
-        Container = container, Lines = lines, Name = nameLbl, Item = itemLbl,
+        Container = container, Lines = lines, Name = nameLbl,
         HealthOuter = healthOuter, HealthFill = healthFill, LineIndex = 1,
     }
     function cache.Hide()
         for _, l in ipairs(lines) do l.Visible = false end
-        nameLbl.Visible = false; itemLbl.Visible = false; healthOuter.Visible = false
+        nameLbl.Visible = false; healthOuter.Visible = false
     end
-    function cache.HideFrom(idx)
-        for i = idx, #lines do lines[i].Visible = false end
-    end
-    function cache.Destroy()
-        if container then container:Destroy() end
-    end
+    function cache.HideFrom(i) for j = i, #lines do lines[j].Visible = false end end
+    function cache.Destroy() if container then container:Destroy() end end
     return cache
 end
 
-local function DrawRect(cache, x, y, w, h, col, trans)
-    local l = cache.Lines[cache.LineIndex]
+local function DrawRect(c, x, y, w, h, col, tr)
+    local l = c.Lines[c.LineIndex]
     if not l then return end
     l.Visible = true
     l.Position = UDim2.new(0, x, 0, y)
     l.Size = UDim2.new(0, math.max(1, w), 0, math.max(1, h))
     l.BackgroundColor3 = col
-    l.BackgroundTransparency = trans or 0
+    l.BackgroundTransparency = tr or 0
     l.Rotation = 0
-    cache.LineIndex = cache.LineIndex + 1
+    c.LineIndex = c.LineIndex + 1
 end
 
-local function DrawBorderedRect(cache, x, y, ex, ey, thickness, outCol, outTrans)
-    DrawRect(cache, x - thickness, y - thickness, (ex - x) + thickness * 2, thickness, outCol, outTrans)
-    DrawRect(cache, x - thickness, ey, (ex - x) + thickness * 2, thickness, outCol, outTrans)
-    DrawRect(cache, x - thickness, y, thickness, ey - y, outCol, outTrans)
-    DrawRect(cache, ex, y, thickness, ey - y, outCol, outTrans)
+local function DrawBorder(c, x, y, ex, ey, t, col, tr)
+    DrawRect(c, x - t, y - t, (ex - x) + t*2, t, col, tr)
+    DrawRect(c, x - t, ey, (ex - x) + t*2, t, col, tr)
+    DrawRect(c, x - t, y, t, ey - y, col, tr)
+    DrawRect(c, ex, y, t, ey - y, col, tr)
 end
 
 local function DrawBoxFor(cache, box3d, camera, color, name, hpProg)
     local minX, minY, maxX, maxY = PlayerUtils.GetScreenBox(box3d, camera)
     if not minX or maxX <= minX or maxY <= minY then return false end
-
     cache.Container.Visible = true
     cache.LineIndex = 1
-    cache.Name.Visible = false; cache.Item.Visible = false; cache.HealthOuter.Visible = false
-
+    cache.Name.Visible = false; cache.HealthOuter.Visible = false
     local x, y, ex, ey = minX, minY, maxX, maxY
 
     if ESP.Settings.Boxes then
         if ESP.Settings.BoxMode == "Box" then
-            DrawBorderedRect(cache, x - 1, y - 1, ex + 1, ey + 1, 1, Colors.BlackTrans, BLACK_TRANS)
-            DrawBorderedRect(cache, x + 1, y + 1, ex - 1, ey - 1, 1, Colors.BlackTrans, BLACK_TRANS)
-            DrawBorderedRect(cache, x, y, ex, ey, 1, color, 0)
+            DrawBorder(cache, x - 1, y - 1, ex + 1, ey + 1, 1, Colors.BlackTrans, BLACK_TRANS)
+            DrawBorder(cache, x + 1, y + 1, ex - 1, ey - 1, 1, Colors.BlackTrans, BLACK_TRANS)
+            DrawBorder(cache, x, y, ex, ey, 1, color, 0)
         else
             local len = (ex - x) / 4
             local vLen = (ey - y) / 4
@@ -535,16 +571,15 @@ end
 
 
 -----------------------------------------------------
--- Update loop with touch-set cleanup
+-- Update loop
 -----------------------------------------------------
-local matchedModels = {}
-local touchedOrphans = {}
+local matchedModels, touchedOrphans = {}, {}
 local lastSkipReason = {}
+local lastDeathReason = {}
 
 local function UpdateESP()
     local camera = Workspace.CurrentCamera
     if not camera then return end
-
     for k in pairs(matchedModels) do matchedModels[k] = nil end
     for k in pairs(touchedOrphans) do touchedOrphans[k] = nil end
 
@@ -561,14 +596,11 @@ local function UpdateESP()
         end
 
         local char, source = ResolveCharacter(plr)
-        source = tostring(source or "unknown")
-
         if not char then
             cache.Container.Visible = false; cache.Hide()
-            lastSkipReason[plr] = "no char (" .. source .. ")"
+            lastSkipReason[plr] = "no char (" .. tostring(source) .. ")"
             continue
         end
-
         matchedModels[char] = plr
 
         local hum = char:FindFirstChildOfClass("Humanoid")
@@ -580,28 +612,20 @@ local function UpdateESP()
 
         if ESP.Settings.TeamCheck and plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team then
             cache.Container.Visible = false; cache.Hide()
-            lastSkipReason[plr] = "team"
             continue
         end
 
         local box3d = PlayerUtils.GetCachedBoundingBox(char)
         if not box3d then
             cache.Container.Visible = false; cache.Hide()
-            lastSkipReason[plr] = "no bounds"
             continue
         end
 
         local color = GetPlayerColor(plr)
         local displayName = (plr.DisplayName ~= "" and plr.DisplayName) or plr.Name
         local hpProg = hum and math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1) or nil
-
         local drawn = DrawBoxFor(cache, box3d, camera, color, displayName, hpProg)
-        if drawn then
-            lastSkipReason[plr] = nil
-        else
-            cache.Container.Visible = false; cache.Hide()
-            lastSkipReason[plr] = "offscreen"
-        end
+        if not drawn then cache.Container.Visible = false; cache.Hide() end
     end
 
     -- Orphan pass
@@ -610,7 +634,7 @@ local function UpdateESP()
         if charsFolder then
             for _, m in ipairs(charsFolder:GetChildren()) do
                 if not m:IsA("Model") then continue end
-                if matchedModels[m] then continue end   -- owned by a player
+                if matchedModels[m] then continue end
 
                 if not ESP.OrphanCache[m] then ESP.OrphanCache[m] = CreateESPCache() end
                 local cache = ESP.OrphanCache[m]
@@ -620,12 +644,16 @@ local function UpdateESP()
                     continue
                 end
 
-                -- Death checks
+                -- Death check
                 if ESP.Settings.HideDeadOrphans then
-                    if IsModelDead(m) or HasRagdollTwin(m) then
+                    local dead, reason = IsOrphanDead(m)
+                    if dead then
                         cache.Container.Visible = false; cache.Hide()
+                        lastDeathReason[m] = reason
+                        -- NOTE: don't set touchedOrphans[m] — let the cleanup pass destroy the cache
                         continue
                     end
+                    lastDeathReason[m] = nil
                 end
 
                 local box3d = PlayerUtils.GetCachedBoundingBox(m)
@@ -635,41 +663,35 @@ local function UpdateESP()
                 end
 
                 touchedOrphans[m] = true
-
                 local drawn = DrawBoxFor(cache, box3d, camera, ESP.Settings.OrphanColor, "??? (" .. m.Name .. ")", nil)
-                if not drawn then
-                    cache.Container.Visible = false; cache.Hide()
-                end
+                if not drawn then cache.Container.Visible = false; cache.Hide() end
             end
         end
     end
 
-    -- CLEANUP: hide and destroy orphan caches whose model wasn't touched this frame
+    -- Cleanup: hide caches whose model is gone from this frame
     for model, cache in pairs(ESP.OrphanCache) do
         if not touchedOrphans[model] then
-            -- Not iterated this frame → model left Characters/ or died
             cache.Container.Visible = false
             cache.Hide()
 
-            -- If the model is destroyed (Parent nil) or no longer in Characters/, drop the cache entirely
-            local stillExists = model and model.Parent ~= nil
+            -- Destroy cache only if model is truly gone from Characters
             local stillInCharacters = false
-            if stillExists then
-                local parent = model.Parent
-                while parent do
-                    if parent.Name == "Characters" then
-                        stillInCharacters = true
-                        break
-                    end
-                    parent = parent.Parent
+            if model and model.Parent then
+                local p = model.Parent
+                while p do
+                    if p.Name == "Characters" then stillInCharacters = true; break end
+                    p = p.Parent
                 end
             end
             if not stillInCharacters then
-                pcall(function() cache.Destroy() end)
+                pcall(cache.Destroy)
                 ESP.OrphanCache[model] = nil
                 ESP.BoundsCache[model] = nil
                 ESP.BoundsCacheTime[model] = nil
                 ESP.BoundsRefPos[model] = nil
+                ESP.MotionHistory[model] = nil
+                lastDeathReason[model] = nil
             end
         end
     end
@@ -679,80 +701,92 @@ end
 -----------------------------------------------------
 -- Diagnostics
 -----------------------------------------------------
+local function CountOrphans()
+    local n = 0
+    for _ in pairs(ESP.OrphanCache) do n = n + 1 end
+    return n
+end
+
 function ESP:Diagnose()
-    print("════════ ESP DIAGNOSTIC V7 ════════")
-    print("Enabled:", ESP.Settings.Enabled)
-    print("ShowUnknown:", ESP.Settings.ShowUnknownCharacters, "| HideDead:", ESP.Settings.HideDeadOrphans)
+    print("════════ ESP DIAGNOSTIC V8 ════════")
+    print("Enabled:", ESP.Settings.Enabled, "| HideDead:", ESP.Settings.HideDeadOrphans)
 
     local chars = Workspace:FindFirstChild("Characters")
     if chars then
-        print("Characters (", #chars:GetChildren(), "children):")
+        print("Characters (" .. #chars:GetChildren() .. "):")
         for _, m in ipairs(chars:GetChildren()) do
-            local dead = IsModelDead(m)
-            local twin = HasRagdollTwin(m)
+            if not m:IsA("Model") then continue end
+            local dead, reason = IsOrphanDead(m)
+            local ref = GetRefPart(m)
+            local upY = ref and ref.CFrame.UpVector.Y or 0
+            local moved = ref and ESP.MotionHistory[m] and (ref.Position - ESP.MotionHistory[m].LastPos).Magnitude or 0
             local parts = 0
-            if m:IsA("Model") then
-                for _, d in ipairs(m:GetDescendants()) do
-                    if d:IsA("BasePart") then parts = parts + 1 end
-                end
-            end
-            print(string.format("  '%s' parts=%d dead=%s ragdollTwin=%s cached=%s",
-                m.Name, parts, tostring(dead), tostring(twin), tostring(ESP.OrphanCache[m] ~= nil)))
+            for _, d in ipairs(m:GetDescendants()) do if d:IsA("BasePart") then parts = parts + 1 end end
+            print(string.format("  '%s' parts=%d dead=%s(%s) upY=%.2f moved=%.2f",
+                m.Name, parts, tostring(dead), reason or "-", upY, moved))
         end
     end
-    print("Orphan caches:", #(function()
-        local n = 0
-        for _ in pairs(ESP.OrphanCache) do n = n + 1 end
-        return {n}
-    end)())
+
+    local ragdolls = Workspace:FindFirstChild("Ragdolls")
+    if ragdolls then
+        print("Ragdolls (" .. #ragdolls:GetChildren() .. "):")
+        for _, r in ipairs(ragdolls:GetChildren()) do
+            local pos
+            local ok, pv = pcall(function() return r:GetPivot().Position end)
+            if ok then pos = pv end
+            print(string.format("  '%s' class=%s pos=%s", r.Name, r.ClassName, pos and tostring(pos) or "?"))
+        end
+    end
+
+    print("Orphan caches:", CountOrphans())
     print("════════════════════════════════")
 end
 
--- Inspect a specific model's state (useful for finding the death marker)
 function ESP:InspectModel(name)
     local chars = Workspace:FindFirstChild("Characters")
-    if not chars then print("No Characters folder"); return end
+    if not chars then print("No Characters"); return end
     local m = chars:FindFirstChild(name)
-    if not m then print("Model '" .. name .. "' not found in Characters"); return end
-    print("─── Inspecting model '" .. name .. "' ───")
-    print("  Name:", m.Name, "| ClassName:", m.ClassName)
-    print("  Parent:", m.Parent and m.Parent:GetFullName() or "nil")
-    print("  Humanoid:", tostring(m:FindFirstChildOfClass("Humanoid")))
-    print("  Attributes:")
-    local attrs = m:GetAttributes()
-    if next(attrs) == nil then print("    (none)")
-    else for k, v in pairs(attrs) do print("    " .. k .. " = " .. tostring(v)) end end
-    print("  Direct children with values:")
-    for _, c in ipairs(m:GetChildren()) do
-        if c:IsA("ValueBase") then print("    " .. c.ClassName .. "[" .. c.Name .. "] = " .. tostring(c.Value))
-        elseif c:IsA("Humanoid") then print("    Humanoid[" .. c.Name .. "] Health=" .. c.Health .. "/" .. c.MaxHealth) end
+    if not m then print("Model '" .. name .. "' not found"); return end
+    print("─── Inspect '" .. name .. "' ───")
+    local dead, reason = IsOrphanDead(m)
+    print("  IsOrphanDead:", dead, "| reason:", reason or "-")
+    local ref = GetRefPart(m)
+    if ref then
+        print("  Ref:", ref.Name, "| pos:", ref.Position, "| upY:", ref.CFrame.UpVector.Y)
+        print("  Velocity:", ref.AssemblyLinearVelocity)
     end
-    print("  IsModelDead:", tostring(IsModelDead(m)))
-    print("  HasRagdollTwin:", tostring(HasRagdollTwin(m)))
+    local hist = ESP.MotionHistory[m]
+    if hist then
+        print("  Motion: moved=" .. tostring((ref and (ref.Position - hist.LastPos).Magnitude or 0)) ..
+              " | lastMove=" .. tostring(os.clock() - hist.LastMoveTime) .. "s ago" ..
+              " | fallTimer=" .. (hist.FallStartTime and tostring(os.clock() - hist.FallStartTime) or "nil"))
+    else
+        print("  Motion: no history")
+    end
+    print("  Attributes:")
+    for k, v in pairs(m:GetAttributes()) do print("    " .. k .. " = " .. tostring(v)) end
+    print("  Near ragdoll:", FindNearbyRagdoll(m))
     print("──────────────────────────────")
 end
 
 _G.ESP = ESP
 
-local errorCount = 0
-local lastEnabled = nil
+local errorCount, lastEnabled = 0, nil
 
 RunService.RenderStepped:Connect(function()
     if ESP.Settings.Enabled ~= lastEnabled then
-        print("[Exhibition ESP] Enabled changed to: " .. tostring(ESP.Settings.Enabled))
+        print("[Exhibition ESP] Enabled = " .. tostring(ESP.Settings.Enabled))
         lastEnabled = ESP.Settings.Enabled
         if ESP.Settings.Enabled then task.delay(1, function() ESP:Diagnose() end) end
     end
     local ok, err = pcall(UpdateESP)
     if not ok then
         errorCount = errorCount + 1
-        if errorCount <= 5 then
-            warn("[Exhibition ESP] Error #" .. errorCount .. ": " .. tostring(err))
-        end
+        if errorCount <= 5 then warn("[Exhibition ESP] Error #" .. errorCount .. ": " .. tostring(err)) end
     end
 end)
 
-print("[Exhibition ESP] Loaded v7. Orphan cleanup active.")
-print("  ESP:InspectModel('2')  — dump model state")
+print("[Exhibition ESP] Loaded v8.")
+print("  ESP:InspectModel('7')  — dump model state")
 print("  ESP:Diagnose()         — full report")
 return ESP
