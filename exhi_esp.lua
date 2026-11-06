@@ -1,10 +1,9 @@
 --[[
-    Exhibition Dynamic ESP  —  ESP_VERSION_8_DEATH
-    Fixes:
-      - Position-based ragdoll matching (name-independent)
-      - Fall + stuck watchdog catches corpses in-place
-      - Orphan cache count diagnostic corrected
-      - ESP:InspectModel now shows motion history + death detection internals
+    Exhibition Dynamic ESP  —  HARDENED (gethui)
+    Works with ANY rig (R6, R15, Rthro, custom, single-mesh, NPCs).
+    Uses gethui() for all GUI parenting to bypass CoreGui scans.
+    Randomises every ScreenGui and GuiObject name to defeat signature scanning.
+    Includes v8 death detection (attributes, ragdoll proximity, fall+stuck).
 ]]
 
 local Players = game:GetService("Players")
@@ -12,6 +11,7 @@ local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
 
 local ESP = {
     Settings = {
@@ -29,46 +29,63 @@ local ESP = {
         MaxBoundsStuds = 40,
         ShowUnknownCharacters = true,
         HideDeadOrphans = true,
-        DeadFallThreshold = 0.4,     -- UpVector.Y below this = fallen
-        DeadStuckSeconds = 1.5,      -- seconds without movement while fallen = dead
-        RagdollProximity = 4,        -- studs — corpse match radius
+        DeadFallThreshold = 0.4,
+        DeadStuckSeconds = 1.5,
+        RagdollProximity = 4,
     },
     Cache = {}, OrphanCache = {},
     BoundsCache = {}, BoundsCacheTime = {}, BoundsRefPos = {},
     ResolverCache = {}, ResolverCacheTime = {}, ResolverCacheSrc = {},
     CharacterSpawnLog = {},
-    MotionHistory = {},          -- model -> { LastPos, LastMoveTime, FallStartTime }
+    MotionHistory = {},
 }
 
-print("[Exhibition ESP] Loading ESP_VERSION_8_DEATH...")
+-----------------------------------------------------
+-- Random name generator (defeats signature scans)
+-----------------------------------------------------
+local function RandomName()
+    local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    local s = ""
+    for _ = 1, 16 do
+        local idx = math.random(1, #chars)
+        s = s .. chars:sub(idx, idx)
+    end
+    return s
+end
 
 -----------------------------------------------------
--- ScreenGui
+-- Hidden GUI parent (gethui)
 -----------------------------------------------------
-local sg = Instance.new("ScreenGui")
-local charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-local randName = ""
-for i = 1, 16 do randName = randName .. string.sub(charset, math.random(1, #charset), math.random(1, #charset)) end
-sg.Name = randName
+local function GetHiddenParent()
+    if gethui then
+        local ok, hui = pcall(gethui)
+        if ok and hui then return hui end
+    end
+    -- Fallback: syn.protect_gui + cloneref
+    if syn and syn.protect_gui then
+        local sg = Instance.new("ScreenGui")
+        pcall(function() syn.protect_gui(sg) end)
+        if cloneref then
+            pcall(function() sg.Parent = cloneref(CoreGui) end)
+        else
+            pcall(function() sg.Parent = CoreGui end)
+        end
+        return sg.Parent, sg
+    end
+    -- Last resort
+    return LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local espParent, preEspGui = GetHiddenParent()
+local sg = preEspGui or Instance.new("ScreenGui")
+sg.Name = RandomName()
 sg.IgnoreGuiInset = true
 sg.ResetOnSpawn = false
 sg.DisplayOrder = 999
 sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-pcall(function() if syn and syn.protect_gui then syn.protect_gui(sg) end end)
+sg.Parent = espParent
 
-local targetParent = CoreGui:FindFirstChild("RobloxGui") or LocalPlayer:WaitForChild("PlayerGui")
-local modulesFolder = targetParent:FindFirstChild("Modules")
-if not modulesFolder then
-    modulesFolder = Instance.new("Folder")
-    modulesFolder.Name = "Modules"
-    modulesFolder.Parent = targetParent
-end
-sg.Parent = modulesFolder
-sg.AncestryChanged:Connect(function(_, p)
-    if not p and sg.Parent ~= modulesFolder then
-        task.defer(function() pcall(function() sg.Parent = modulesFolder end) end)
-    end
-end)
+print("[Exhibition ESP] Hardened module loaded (gethui).")
 
 local Colors = {
     BlackTrans = Color3.fromRGB(0, 0, 0),
@@ -77,9 +94,9 @@ local Colors = {
 local BLACK_TRANS = 1 - (150 / 255)
 
 local function Create(cls, props)
-    local i = Instance.new(cls)
-    for k, v in pairs(props or {}) do i[k] = v end
-    return i
+    local inst = Instance.new(cls)
+    for k, v in pairs(props or {}) do inst[k] = v end
+    return inst
 end
 
 local function GetPlayerColor(plr)
@@ -90,29 +107,18 @@ local function GetPlayerColor(plr)
 end
 
 local function BlendColors(progress)
-    if progress >= 0.5 then return Colors.Yellow:Lerp(Colors.Green, (progress - 0.5) * 2) end
-    return Colors.Red:Lerp(Colors.Yellow, progress * 2)
+    if progress >= 0.5 then
+        return Colors.Yellow:Lerp(Colors.Green, (progress - 0.5) * 2)
+    else
+        return Colors.Red:Lerp(Colors.Yellow, progress * 2)
+    end
 end
-
-
------------------------------------------------------
--- Spawn log
------------------------------------------------------
-for _, plr in ipairs(Players:GetPlayers()) do
-    plr.CharacterAdded:Connect(function(c) ESP.CharacterSpawnLog[plr] = c end)
-    if plr.Character then ESP.CharacterSpawnLog[plr] = plr.Character end
-end
-Players.PlayerAdded:Connect(function(plr)
-    plr.CharacterAdded:Connect(function(c) ESP.CharacterSpawnLog[plr] = c end)
-end)
-
 
 -----------------------------------------------------
 -- Death detection
 -----------------------------------------------------
 local RAGDOLL_FOLDERS = { "Ragdolls", "DeadBodies", "Corpses", "Dead" }
 
--- Find ANY model in ragdoll folders within proximity of this model
 local function FindNearbyRagdoll(model)
     local mpos
     local ok, pivot = pcall(function() return model:GetPivot().Position end)
@@ -140,7 +146,6 @@ local function FindNearbyRagdoll(model)
     return false
 end
 
--- Get a "reference" part for motion tracking
 local function GetRefPart(model)
     if model.PrimaryPart then return model.PrimaryPart end
     local hrp = model:FindFirstChild("HumanoidRootPart")
@@ -153,7 +158,6 @@ local function GetRefPart(model)
     return nil
 end
 
--- Fall + stuck watchdog
 local function IsCorpseByMotion(model)
     local ref = GetRefPart(model)
     if not ref then return false end
@@ -161,15 +165,10 @@ local function IsCorpseByMotion(model)
     local now = os.clock()
     local hist = ESP.MotionHistory[model]
     if not hist then
-        ESP.MotionHistory[model] = {
-            LastPos = ref.Position,
-            LastMoveTime = now,
-            FallStartTime = nil,
-        }
+        ESP.MotionHistory[model] = { LastPos = ref.Position, LastMoveTime = now, FallStartTime = nil }
         return false
     end
 
-    -- Detect movement
     local moved = (ref.Position - hist.LastPos).Magnitude > 0.5
     if moved then
         hist.LastPos = ref.Position
@@ -178,7 +177,6 @@ local function IsCorpseByMotion(model)
         return false
     end
 
-    -- Check fallen state
     local up = ref.CFrame.UpVector
     local fallen = up.Y < ESP.Settings.DeadFallThreshold
     if not fallen then
@@ -186,7 +184,6 @@ local function IsCorpseByMotion(model)
         return false
     end
 
-    -- Fallen + stuck for threshold seconds = corpse
     if not hist.FallStartTime then
         hist.FallStartTime = now
         return false
@@ -195,7 +192,6 @@ local function IsCorpseByMotion(model)
     return (now - hist.FallStartTime) >= ESP.Settings.DeadStuckSeconds
 end
 
--- Attribute / value child / name based death check
 local function IsModelDead(model)
     local hum = model:FindFirstChildOfClass("Humanoid")
     if hum and hum.Health <= 0 then return true, "humanoid" end
@@ -229,25 +225,19 @@ local function IsModelDead(model)
 
     local n = model.Name:lower()
     if n:find("dead") or n:find("ragdoll") or n:find("corpse") then return true, "name" end
-
     return false, nil
 end
 
--- Combined: is this orphan model dead?
 local function IsOrphanDead(model)
     local byAttr, reason = IsModelDead(model)
     if byAttr then return true, reason end
-
     if FindNearbyRagdoll(model) then return true, "nearby ragdoll" end
-
     if IsCorpseByMotion(model) then return true, "fallen+stuck" end
-
     return false, nil
 end
 
-
 -----------------------------------------------------
--- Resolver (unchanged from v7)
+-- Universal character resolution
 -----------------------------------------------------
 local SKIP_FOLDERS = { Debris = true, Ragdolls = true, Effects = true, Particles = true, Fx = true, VFX = true }
 local CharacterMap = {}
@@ -368,7 +358,6 @@ local function ResolveCharacter(plr)
     return result, source or "unresolved"
 end
 
-
 -----------------------------------------------------
 -- Bounds + drawables
 -----------------------------------------------------
@@ -466,31 +455,39 @@ function PlayerUtils.GetCachedBoundingBox(character)
     return box
 end
 
+-----------------------------------------------------
+-- Drawables (randomised names)
+-----------------------------------------------------
 local LINE_POOL = 120
 
 local function CreateESPCache()
     local container = Create("Frame", {
+        Name = RandomName(),
         BackgroundTransparency = 1, BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 1, 0), Visible = false, ZIndex = 100, Parent = sg,
     })
     local lines = {}
     for i = 1, LINE_POOL do
         table.insert(lines, Create("Frame", {
+            Name = RandomName(),
             BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0,
             BorderSizePixel = 0, Size = UDim2.new(0, 1, 0, 1), Visible = false, ZIndex = 100, Parent = container,
         }))
     end
     local nameLbl = Create("TextLabel", {
+        Name = RandomName(),
         BackgroundTransparency = 1, Font = Enum.Font.SourceSansBold, TextSize = 14,
         TextColor3 = Color3.new(1, 1, 1), TextStrokeColor3 = Color3.new(0, 0, 0),
         TextStrokeTransparency = 1 - (190 / 255), Size = UDim2.new(0, 200, 0, 16),
         AnchorPoint = Vector2.new(0.5, 1), Visible = false, ZIndex = 101, Parent = container,
     })
     local healthOuter = Create("Frame", {
+        Name = RandomName(),
         BackgroundColor3 = Colors.BlackTrans, BackgroundTransparency = BLACK_TRANS,
         BorderSizePixel = 0, Visible = false, ZIndex = 100, Parent = container,
     })
     local healthFill = Create("Frame", {
+        Name = RandomName(),
         BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 100, Parent = healthOuter,
     })
     local cache = {
@@ -569,7 +566,6 @@ local function DrawBoxFor(cache, box3d, camera, color, name, hpProg)
     return true
 end
 
-
 -----------------------------------------------------
 -- Update loop
 -----------------------------------------------------
@@ -644,13 +640,11 @@ local function UpdateESP()
                     continue
                 end
 
-                -- Death check
                 if ESP.Settings.HideDeadOrphans then
                     local dead, reason = IsOrphanDead(m)
                     if dead then
                         cache.Container.Visible = false; cache.Hide()
                         lastDeathReason[m] = reason
-                        -- NOTE: don't set touchedOrphans[m] — let the cleanup pass destroy the cache
                         continue
                     end
                     lastDeathReason[m] = nil
@@ -669,13 +663,11 @@ local function UpdateESP()
         end
     end
 
-    -- Cleanup: hide caches whose model is gone from this frame
+    -- Cleanup
     for model, cache in pairs(ESP.OrphanCache) do
         if not touchedOrphans[model] then
             cache.Container.Visible = false
             cache.Hide()
-
-            -- Destroy cache only if model is truly gone from Characters
             local stillInCharacters = false
             if model and model.Parent then
                 local p = model.Parent
@@ -697,7 +689,6 @@ local function UpdateESP()
     end
 end
 
-
 -----------------------------------------------------
 -- Diagnostics
 -----------------------------------------------------
@@ -708,7 +699,7 @@ local function CountOrphans()
 end
 
 function ESP:Diagnose()
-    print("════════ ESP DIAGNOSTIC V8 ════════")
+    print("════════ ESP DIAGNOSTIC (gethui) ════════")
     print("Enabled:", ESP.Settings.Enabled, "| HideDead:", ESP.Settings.HideDeadOrphans)
 
     local chars = Workspace:FindFirstChild("Characters")
@@ -771,6 +762,9 @@ end
 
 _G.ESP = ESP
 
+-----------------------------------------------------
+-- Lifecycle
+-----------------------------------------------------
 local errorCount, lastEnabled = 0, nil
 
 RunService.RenderStepped:Connect(function()
@@ -786,7 +780,5 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-print("[Exhibition ESP] Loaded v8.")
-print("  ESP:InspectModel('7')  — dump model state")
-print("  ESP:Diagnose()         — full report")
+print("[Exhibition ESP] Hardened module ready. Use ESP:Diagnose() or ESP:InspectModel('name').")
 return ESP
