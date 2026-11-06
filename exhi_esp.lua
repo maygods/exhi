@@ -1,15 +1,12 @@
 --[[
     Exhibition Dynamic ESP
     Works with ANY rig (R6, R15, Rthro, custom, single-mesh, NPCs).
-    Uses real AABB bounds computed from character parts instead of a fixed box.
-    Skeleton is joint-driven, so it works for custom rigs too.
+    Uses real AABB bounds computed from character parts.
 
-    FIX NOTES:
-      - ScreenGui is parented to CoreGui directly (RobloxGui filters user GUIs).
-      - Container is a full-size Frame so children render reliably.
-      - Errors are surfaced once, not silently swallowed by pcall.
-      - Label positioning uses AnchorPoint instead of TextBounds races.
-      - Debug print confirms the render loop is connected and Enabled updates.
+    PARENTING FIX:
+      Roblox filters ScreenGuis parented directly to CoreGui.
+      We must use RobloxGui.Modules — the same parent ExhibitionLib uses.
+      This is why the previous version ran but never rendered.
 ]]
 
 local Players = game:GetService("Players")
@@ -44,7 +41,7 @@ local ESP = {
 print("[Exhibition ESP] Loading dynamic ESP module...")
 
 -----------------------------------------------------
--- ScreenGui setup — the fix
+-- ScreenGui parented exactly like ExhibitionLib
 -----------------------------------------------------
 local sg = Instance.new("ScreenGui")
 local charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -53,50 +50,48 @@ for i = 1, 16 do randName = randName .. string.sub(charset, math.random(1, #char
 sg.Name = randName
 sg.IgnoreGuiInset = true
 sg.ResetOnSpawn = false
-sg.DisplayOrder = 100
+sg.DisplayOrder = 999
 sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 pcall(function() if syn and syn.protect_gui then syn.protect_gui(sg) end end)
 
--- Parent to CoreGui directly, fall back to PlayerGui if CoreGui is read-only.
-local parentName = "nil"
-do
-    local okCore = pcall(function()
-        sg.Parent = CoreGui
-    end)
-    if okCore and sg.Parent == CoreGui then
-        parentName = "CoreGui"
-    else
-        local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 10)
-        if pg then
-            local okPg = pcall(function() sg.Parent = pg end)
-            if okPg and sg.Parent == pg then
-                parentName = "PlayerGui"
-            end
-        end
-    end
+-- Same parent resolution as ExhibitionLib: RobloxGui.Modules
+local targetParent = CoreGui:FindFirstChild("RobloxGui") or LocalPlayer:WaitForChild("PlayerGui")
+local modulesFolder = targetParent:FindFirstChild("Modules")
+if not modulesFolder then
+    modulesFolder = Instance.new("Folder")
+    modulesFolder.Name = "Modules"
+    modulesFolder.Parent = targetParent
 end
+sg.Parent = modulesFolder
+print("[Exhibition ESP] ScreenGui parented to: " .. modulesFolder:GetFullName())
 
-if not sg.Parent then
-    warn("[Exhibition ESP] Could not find a valid parent for ScreenGui. ESP disabled.")
-    ESP.Settings.Enabled = false
-    return ESP
-end
-
-print("[Exhibition ESP] ScreenGui parented to: " .. parentName)
-
--- Guard against deletion by other scripts
 sg.AncestryChanged:Connect(function(_, parent)
-    if not parent then
-        task.defer(function()
-            local ok = pcall(function() sg.Parent = CoreGui end)
-            if not ok or not sg.Parent then
-                local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-                if pg then pcall(function() sg.Parent = pg end) end
-            end
-        end)
+    if not parent and sg.Parent ~= modulesFolder then
+        task.defer(function() pcall(function() sg.Parent = modulesFolder end) end)
     end
 end)
 
+-----------------------------------------------------
+-- Load-time rendering test (magenta square)
+-----------------------------------------------------
+local testFrame = Instance.new("Frame")
+testFrame.Name = "ESP_RenderTest"
+testFrame.Size = UDim2.new(0, 80, 0, 80)
+testFrame.Position = UDim2.new(0, 20, 0, 20)
+testFrame.BackgroundColor3 = Color3.fromRGB(255, 0, 255)
+testFrame.BorderSizePixel = 3
+testFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
+testFrame.ZIndex = 9999
+testFrame.Parent = sg
+
+print("[Exhibition ESP] TEST SQUARE drawn top-left. If you do NOT see a magenta square, rendering is broken.")
+task.delay(8, function()
+    if testFrame and testFrame.Parent then testFrame:Destroy() end
+end)
+
+-----------------------------------------------------
+-- Utilities
+-----------------------------------------------------
 local Colors = {
     BlackTrans = Color3.fromRGB(0, 0, 0),
     Red = Color3.fromRGB(255, 0, 0),
@@ -120,17 +115,14 @@ end
 
 local function BlendColors(progress)
     if progress >= 0.5 then
-        local p = (progress - 0.5) * 2
-        return Colors.Yellow:Lerp(Colors.Green, p)
+        return Colors.Yellow:Lerp(Colors.Green, (progress - 0.5) * 2)
     else
-        local p = progress * 2
-        return Colors.Red:Lerp(Colors.Yellow, p)
+        return Colors.Red:Lerp(Colors.Yellow, progress * 2)
     end
 end
 
-
 -----------------------------------------------------
--- Dynamic body utilities
+-- Body utilities
 -----------------------------------------------------
 local PlayerUtils = {}
 
@@ -166,50 +158,37 @@ end
 function PlayerUtils.GetBoundingBox(character)
     local parts = PlayerUtils.GetBodyParts(character)
     if #parts == 0 then return nil end
-
     local min = Vector3.new(1e9, 1e9, 1e9)
     local max = Vector3.new(-1e9, -1e9, -1e9)
-
     for _, part in ipairs(parts) do
         local cf = part.CFrame
         local s = part.Size * 0.5
-        for _, corner in ipairs({
-            cf * Vector3.new(-s.X, -s.Y, -s.Z),
-            cf * Vector3.new( s.X, -s.Y, -s.Z),
-            cf * Vector3.new(-s.X,  s.Y, -s.Z),
-            cf * Vector3.new( s.X,  s.Y, -s.Z),
-            cf * Vector3.new(-s.X, -s.Y,  s.Z),
-            cf * Vector3.new( s.X, -s.Y,  s.Z),
-            cf * Vector3.new(-s.X,  s.Y,  s.Z),
-            cf * Vector3.new( s.X,  s.Y,  s.Z),
+        for _, c in ipairs({
+            cf * Vector3.new(-s.X, -s.Y, -s.Z), cf * Vector3.new(s.X, -s.Y, -s.Z),
+            cf * Vector3.new(-s.X,  s.Y, -s.Z), cf * Vector3.new(s.X,  s.Y, -s.Z),
+            cf * Vector3.new(-s.X, -s.Y,  s.Z), cf * Vector3.new(s.X, -s.Y,  s.Z),
+            cf * Vector3.new(-s.X,  s.Y,  s.Z), cf * Vector3.new(s.X,  s.Y,  s.Z),
         }) do
-            min = Vector3.new(math.min(min.X, corner.X), math.min(min.Y, corner.Y), math.min(min.Z, corner.Z))
-            max = Vector3.new(math.max(max.X, corner.X), math.max(max.Y, corner.Y), math.max(max.Z, corner.Z))
+            min = Vector3.new(math.min(min.X, c.X), math.min(min.Y, c.Y), math.min(min.Z, c.Z))
+            max = Vector3.new(math.max(max.X, c.X), math.max(max.Y, c.Y), math.max(max.Z, c.Z))
         end
     end
-
     local pad = ESP.Settings.BoundsPadding
     if pad and pad > 0 then
         min = min - Vector3.new(pad, pad, pad)
         max = max + Vector3.new(pad, pad, pad)
     end
-
-    local rootPart = character:FindFirstChild("HumanoidRootPart") or character.PrimaryPart or parts[1]
-    return { Min = min, Max = max, Root = rootPart, Character = character }
+    return { Min = min, Max = max, Character = character }
 end
 
 function PlayerUtils.GetScreenBox(box, camera)
     if not box then return nil end
     local min, max = box.Min, box.Max
     local corners = {
-        Vector3.new(min.X, min.Y, min.Z),
-        Vector3.new(max.X, min.Y, min.Z),
-        Vector3.new(min.X, max.Y, min.Z),
-        Vector3.new(max.X, max.Y, min.Z),
-        Vector3.new(min.X, min.Y, max.Z),
-        Vector3.new(max.X, min.Y, max.Z),
-        Vector3.new(min.X, max.Y, max.Z),
-        Vector3.new(max.X, max.Y, max.Z),
+        Vector3.new(min.X, min.Y, min.Z), Vector3.new(max.X, min.Y, min.Z),
+        Vector3.new(min.X, max.Y, min.Z), Vector3.new(max.X, max.Y, min.Z),
+        Vector3.new(min.X, min.Y, max.Z), Vector3.new(max.X, min.Y, max.Z),
+        Vector3.new(min.X, max.Y, max.Z), Vector3.new(max.X, max.Y, max.Z),
     }
     local minX, minY, maxX, maxY = 1e9, 1e9, -1e9, -1e9
     local any = false
@@ -246,47 +225,28 @@ function PlayerUtils.CleanCharacter(character)
     ESP.BoundsCacheTime[character] = nil
 end
 
-
 -----------------------------------------------------
--- Skeleton graph
+-- Skeleton links
 -----------------------------------------------------
 local R6_LINKS = {
-    { "Head", "Torso" },
-    { "Torso", "Left Arm" },
-    { "Torso", "Right Arm" },
-    { "Torso", "Left Leg" },
-    { "Torso", "Right Leg" },
+    { "Head", "Torso" }, { "Torso", "Left Arm" }, { "Torso", "Right Arm" },
+    { "Torso", "Left Leg" }, { "Torso", "Right Leg" },
 }
-
 local R15_LINKS = {
-    { "Head", "UpperTorso" },
-    { "UpperTorso", "LowerTorso" },
-    { "UpperTorso", "LeftUpperArm" },
-    { "LeftUpperArm", "LeftLowerArm" },
-    { "LeftLowerArm", "LeftHand" },
-    { "UpperTorso", "RightUpperArm" },
-    { "RightUpperArm", "RightLowerArm" },
-    { "RightLowerArm", "RightHand" },
-    { "LowerTorso", "LeftUpperLeg" },
-    { "LeftUpperLeg", "LeftLowerLeg" },
-    { "LeftLowerLeg", "LeftFoot" },
-    { "LowerTorso", "RightUpperLeg" },
-    { "RightUpperLeg", "RightLowerLeg" },
-    { "RightLowerLeg", "RightFoot" },
+    { "Head", "UpperTorso" }, { "UpperTorso", "LowerTorso" },
+    { "UpperTorso", "LeftUpperArm" }, { "LeftUpperArm", "LeftLowerArm" }, { "LeftLowerArm", "LeftHand" },
+    { "UpperTorso", "RightUpperArm" }, { "RightUpperArm", "RightLowerArm" }, { "RightLowerArm", "RightHand" },
+    { "LowerTorso", "LeftUpperLeg" }, { "LeftUpperLeg", "LeftLowerLeg" }, { "LeftLowerLeg", "LeftFoot" },
+    { "LowerTorso", "RightUpperLeg" }, { "RightUpperLeg", "RightLowerLeg" }, { "RightLowerLeg", "RightFoot" },
 }
 
 local function GetSkeletonLinks(character)
     local mode = ESP.Settings.SkeletonMode
-    local hasR15 = character:FindFirstChild("UpperTorso") ~= nil
-    local hasR6 = character:FindFirstChild("Torso") ~= nil and character:FindFirstChild("Head") ~= nil
-
     if mode == "R6" then return R6_LINKS end
     if mode == "R15" then return R15_LINKS end
-    if hasR15 then return R15_LINKS end
-    if hasR6 then return R6_LINKS end
-
-    local links = {}
-    local seen = {}
+    if character:FindFirstChild("UpperTorso") then return R15_LINKS end
+    if character:FindFirstChild("Torso") and character:FindFirstChild("Head") then return R6_LINKS end
+    local links, seen = {}, {}
     for _, joint in ipairs(character:GetDescendants()) do
         if joint:IsA("Motor6D") or joint:IsA("Weld") or joint:IsA("HingeConstraint") or joint:IsA("BallSocketConstraint") then
             local p0, p1 = joint.Part0, joint.Part1
@@ -301,47 +261,21 @@ local function GetSkeletonLinks(character)
             end
         end
     end
-    if #links > 0 then return links end
-
-    local parts = PlayerUtils.GetBodyParts(character)
-    if #parts <= 1 then return {} end
-    local connected = { [parts[1]] = true }
-    local ordered = { parts[1] }
-    while #ordered < #parts do
-        local bestPart, bestDist, bestAnchor = nil, math.huge, nil
-        for _, p in ipairs(parts) do
-            if not connected[p] then
-                for _, anchor in ipairs(ordered) do
-                    local d = (p.Position - anchor.Position).Magnitude
-                    if d < bestDist then
-                        bestDist = d
-                        bestPart = p
-                        bestAnchor = anchor
-                    end
-                end
-            end
-        end
-        if not bestPart then break end
-        connected[bestPart] = true
-        table.insert(ordered, bestPart)
-        if bestAnchor then table.insert(links, { bestPart.Name, bestAnchor.Name }) end
-    end
     return links
 end
 
-
 -----------------------------------------------------
--- Drawing utilities
+-- Drawables
 -----------------------------------------------------
 local LINE_POOL_SIZE = 120
 
 local function CreateESPCache()
-    -- Full-size transparent container: guarantees children render.
     local container = Create("Frame", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 1, 0),
         Visible = false,
+        ZIndex = 100,
         Parent = sg,
     })
 
@@ -354,6 +288,7 @@ local function CreateESPCache()
             Position = UDim2.new(0, 0, 0, 0),
             Size = UDim2.new(0, 1, 0, 1),
             Visible = false,
+            ZIndex = 100,
             Parent = container,
         }))
     end
@@ -368,6 +303,7 @@ local function CreateESPCache()
         Size = UDim2.new(0, 200, 0, 16),
         AnchorPoint = Vector2.new(0.5, 1),
         Visible = false,
+        ZIndex = 101,
         Parent = container,
     })
 
@@ -381,6 +317,7 @@ local function CreateESPCache()
         Size = UDim2.new(0, 200, 0, 14),
         AnchorPoint = Vector2.new(0.5, 0),
         Visible = false,
+        ZIndex = 101,
         Parent = container,
     })
 
@@ -389,19 +326,22 @@ local function CreateESPCache()
         BackgroundTransparency = BLACK_TRANS,
         BorderSizePixel = 0,
         Visible = false,
+        ZIndex = 100,
         Parent = container,
     })
-
     local healthInner = Create("Frame", {
         BackgroundColor3 = Colors.BlackTrans,
         BackgroundTransparency = 1 - (35 / 255),
         BorderSizePixel = 0,
+        Position = UDim2.new(0, 1, 0, 1),
+        Size = UDim2.new(1, -2, 1, -2),
+        ZIndex = 100,
         Parent = healthOuter,
     })
-
     local healthFill = Create("Frame", {
         BackgroundColor3 = Color3.new(1, 1, 1),
         BorderSizePixel = 0,
+        ZIndex = 100,
         Parent = healthOuter,
     })
 
@@ -423,8 +363,8 @@ local function CreateESPCache()
         healthOuter.Visible = false
     end
 
-    function cache.HideFrom(index)
-        for i = index, #lines do lines[i].Visible = false end
+    function cache.HideFrom(idx)
+        for i = idx, #lines do lines[i].Visible = false end
     end
 
     return cache
@@ -461,188 +401,188 @@ local function DrawRotatedLine(cache, p1, p2, color, thickness)
     cache.LineIndex = cache.LineIndex + 1
 end
 
-local function DrawBorderedRect(cache, x, y, endx, endy, thickness, outCol, outTrans)
-    DrawRect(cache, x - thickness, y - thickness, (endx - x) + thickness * 2, thickness, outCol, outTrans)
-    DrawRect(cache, x - thickness, endy, (endx - x) + thickness * 2, thickness, outCol, outTrans)
-    DrawRect(cache, x - thickness, y, thickness, endy - y, outCol, outTrans)
-    DrawRect(cache, endx, y, thickness, endy - y, outCol, outTrans)
+local function DrawBorderedRect(cache, x, y, ex, ey, thickness, outCol, outTrans)
+    DrawRect(cache, x - thickness, y - thickness, (ex - x) + thickness * 2, thickness, outCol, outTrans)
+    DrawRect(cache, x - thickness, ey, (ex - x) + thickness * 2, thickness, outCol, outTrans)
+    DrawRect(cache, x - thickness, y, thickness, ey - y, outCol, outTrans)
+    DrawRect(cache, ex, y, thickness, ey - y, outCol, outTrans)
 end
 
+-----------------------------------------------------
+-- Main loop with verbose first-frame logging
+-----------------------------------------------------
+local drawnOnce = false
 
------------------------------------------------------
--- Main ESP update
------------------------------------------------------
 local function UpdateESP()
     local camera = Workspace.CurrentCamera
     if not camera then return end
 
     for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer then
-            if not ESP.Cache[plr] then
-                ESP.Cache[plr] = CreateESPCache()
+        if plr == LocalPlayer then continue end
+
+        if not ESP.Cache[plr] then
+            ESP.Cache[plr] = CreateESPCache()
+        end
+        local cache = ESP.Cache[plr]
+
+        if not ESP.Settings.Enabled then
+            cache.Container.Visible = false
+            cache.Hide()
+            continue
+        end
+
+        local char = plr.Character
+        if not char then
+            cache.Container.Visible = false
+            cache.Hide()
+            continue
+        end
+
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then
+            cache.Container.Visible = false
+            cache.Hide()
+            continue
+        end
+
+        if ESP.Settings.TeamCheck and plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team then
+            cache.Container.Visible = false
+            cache.Hide()
+            continue
+        end
+
+        local box3d = PlayerUtils.GetCachedBoundingBox(char)
+        if not box3d then
+            cache.Container.Visible = false
+            cache.Hide()
+            continue
+        end
+
+        local minX, minY, maxX, maxY = PlayerUtils.GetScreenBox(box3d, camera)
+        if not minX or maxX <= minX or maxY <= minY then
+            cache.Container.Visible = false
+            cache.Hide()
+            continue
+        end
+
+        -- Log the very first successful draw for debugging
+        if not drawnOnce then
+            drawnOnce = true
+            print(string.format("[Exhibition ESP] First draw: %s at screen (%d,%d) to (%d,%d)",
+                plr.Name, minX, minY, maxX, maxY))
+        end
+
+        cache.Container.Visible = true
+        cache.LineIndex = 1
+        cache.Name.Visible = false
+        cache.Item.Visible = false
+        cache.HealthOuter.Visible = false
+
+        local color = GetPlayerColor(plr)
+        local x, y, ex, ey = minX, minY, maxX, maxY
+
+        if ESP.Settings.Boxes then
+            local mode = ESP.Settings.BoxMode
+            if mode == "Box" then
+                DrawBorderedRect(cache, x - 1, y - 1, ex + 1, ey + 1, 1, Colors.BlackTrans, BLACK_TRANS)
+                DrawBorderedRect(cache, x + 1, y + 1, ex - 1, ey - 1, 1, Colors.BlackTrans, BLACK_TRANS)
+                DrawBorderedRect(cache, x, y, ex, ey, 1, color, 0)
+            elseif mode == "Corner A" or mode == "Split" then
+                local len = (ex - x) / 4
+                local vLen = (ey - y) / 4
+                DrawRect(cache, x, y, 1, vLen, color, 0)
+                DrawRect(cache, x, y, len, 1, color, 0)
+                DrawRect(cache, ex, y, 1, vLen, color, 0)
+                DrawRect(cache, ex - len, y, len, 1, color, 0)
+                DrawRect(cache, x, ey - vLen, 1, vLen, color, 0)
+                DrawRect(cache, x, ey, len, 1, color, 0)
+                DrawRect(cache, ex, ey - vLen, 1, vLen, color, 0)
+                DrawRect(cache, ex - len, ey, len, 1, color, 0)
             end
-            local cache = ESP.Cache[plr]
+        end
 
-            if not ESP.Settings.Enabled then
-                cache.Container.Visible = false
-                cache.Hide()
-                continue
+        if ESP.Settings.Health and hum then
+            cache.HealthOuter.Visible = true
+            local hp = hum.Health
+            local maxHp = hum.MaxHealth
+            if maxHp <= 0 then maxHp = 100 end
+            local prog = math.clamp(hp / maxHp, 0, 1)
+            local diff = ey - y
+            cache.HealthOuter.Position = UDim2.new(0, x - 6, 0, y)
+            cache.HealthOuter.Size = UDim2.new(0, 4, 0, diff)
+            cache.HealthFill.BackgroundColor3 = BlendColors(prog)
+            cache.HealthFill.Position = UDim2.new(0, 1, 0, 1 + (diff - 2) * (1 - prog))
+            cache.HealthFill.Size = UDim2.new(1, -2, 0, math.max(0, (diff - 2) * prog))
+        end
+
+        if ESP.Settings.Names then
+            cache.Name.Visible = true
+            cache.Name.Text = (plr.DisplayName ~= "" and plr.DisplayName) or plr.Name
+            cache.Name.TextColor3 = ESP.Settings.TeamColors and color or Color3.new(1, 1, 1)
+            cache.Name.Position = UDim2.new(0, x + (ex - x) / 2, 0, y - 3)
+        end
+
+        if ESP.Settings.Items then
+            local tool = char:FindFirstChildOfClass("Tool")
+            if tool then
+                cache.Item.Visible = true
+                cache.Item.Text = tool.Name
+                cache.Item.Position = UDim2.new(0, x + (ex - x) / 2, 0, ey + 3)
             end
+        end
 
-            local char = plr.Character
-            if not char then
-                cache.Container.Visible = false
-                cache.Hide()
-                continue
-            end
-
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if not hum or hum.Health <= 0 then
-                cache.Container.Visible = false
-                cache.Hide()
-                continue
-            end
-
-            if ESP.Settings.TeamCheck and plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team then
-                cache.Container.Visible = false
-                cache.Hide()
-                continue
-            end
-
-            local box3d = PlayerUtils.GetCachedBoundingBox(char)
-            if not box3d then
-                cache.Container.Visible = false
-                cache.Hide()
-                continue
-            end
-
-            local minX, minY, maxX, maxY = PlayerUtils.GetScreenBox(box3d, camera)
-            if not minX or maxX <= minX or maxY <= minY then
-                cache.Container.Visible = false
-                cache.Hide()
-                continue
-            end
-
-            cache.Container.Visible = true
-            cache.LineIndex = 1
-            cache.Name.Visible = false
-            cache.Item.Visible = false
-            cache.HealthOuter.Visible = false
-
-            local color = GetPlayerColor(plr)
-            local x, y, endx, endy = minX, minY, maxX, maxY
-
-            -- Box
-            if ESP.Settings.Boxes then
-                if ESP.Settings.BoxMode == "Box" then
-                    DrawBorderedRect(cache, x - 1, y - 1, endx + 1, endy + 1, 1, Colors.BlackTrans, BLACK_TRANS)
-                    DrawBorderedRect(cache, x + 1, y + 1, endx - 1, endy - 1, 1, Colors.BlackTrans, BLACK_TRANS)
-                    DrawBorderedRect(cache, x, y, endx, endy, 1, color, 0)
-                elseif ESP.Settings.BoxMode == "Corner A" or ESP.Settings.BoxMode == "Split" then
-                    local len = (endx - x) / 4
-                    local vertLen = (endy - y) / 4
-                    DrawRect(cache, x, y, 1, vertLen, color, 0)
-                    DrawRect(cache, x, y, len, 1, color, 0)
-                    DrawRect(cache, endx, y, 1, vertLen, color, 0)
-                    DrawRect(cache, endx - len, y, len, 1, color, 0)
-                    DrawRect(cache, x, endy - vertLen, 1, vertLen, color, 0)
-                    DrawRect(cache, x, endy, len, 1, color, 0)
-                    DrawRect(cache, endx, endy - vertLen, 1, vertLen, color, 0)
-                    DrawRect(cache, endx - len, endy, len, 1, color, 0)
-                end
-            end
-
-            -- Health
-            if ESP.Settings.Health and hum then
-                cache.HealthOuter.Visible = true
-                local hp = hum.Health
-                local maxHp = hum.MaxHealth
-                if maxHp <= 0 then maxHp = 100 end
-                local prog = math.clamp(hp / maxHp, 0, 1)
-                local hpColor = BlendColors(prog)
-                local diff = endy - y
-                cache.HealthOuter.Position = UDim2.new(0, x - 6, 0, y)
-                cache.HealthOuter.Size = UDim2.new(0, 4, 0, diff)
-                cache.HealthInner.Position = UDim2.new(0, 1, 0, 1)
-                cache.HealthInner.Size = UDim2.new(1, -2, 1, -2)
-                cache.HealthFill.BackgroundColor3 = hpColor
-                cache.HealthFill.Position = UDim2.new(0, 1, 0, 1 + (diff - 2) * (1 - prog))
-                cache.HealthFill.Size = UDim2.new(1, -2, 0, math.max(0, (diff - 2) * prog))
-            end
-
-            -- Name
-            if ESP.Settings.Names then
-                cache.Name.Visible = true
-                cache.Name.Text = (plr.DisplayName ~= "" and plr.DisplayName) or plr.Name
-                cache.Name.TextColor3 = ESP.Settings.TeamColors and color or Color3.new(1, 1, 1)
-                cache.Name.Position = UDim2.new(0, x + (endx - x) / 2, 0, y - 3)
-            end
-
-            -- Items
-            if ESP.Settings.Items then
-                local tool = char:FindFirstChildOfClass("Tool")
-                if tool then
-                    cache.Item.Visible = true
-                    cache.Item.Text = tool.Name
-                    cache.Item.Position = UDim2.new(0, x + (endx - x) / 2, 0, endy + 3)
-                end
-            end
-
-            -- Skeleton
-            if ESP.Settings.Skeleton then
-                local links = GetSkeletonLinks(char)
-                for _, link in ipairs(links) do
-                    local p1 = char:FindFirstChild(link[1])
-                    local p2 = char:FindFirstChild(link[2])
-                    if p1 and p2 then
-                        local pos1, vis1 = camera:WorldToViewportPoint(p1.Position)
-                        local pos2, vis2 = camera:WorldToViewportPoint(p2.Position)
-                        if vis1 or vis2 then
-                            DrawRotatedLine(cache, Vector2.new(pos1.X, pos1.Y), Vector2.new(pos2.X, pos2.Y), ESP.Settings.SkeletonColor, 1)
-                        end
+        if ESP.Settings.Skeleton then
+            for _, link in ipairs(GetSkeletonLinks(char)) do
+                local p1 = char:FindFirstChild(link[1])
+                local p2 = char:FindFirstChild(link[2])
+                if p1 and p2 then
+                    local s1, v1 = camera:WorldToViewportPoint(p1.Position)
+                    local s2, v2 = camera:WorldToViewportPoint(p2.Position)
+                    if v1 or v2 then
+                        DrawRotatedLine(cache, Vector2.new(s1.X, s1.Y), Vector2.new(s2.X, s2.Y), ESP.Settings.SkeletonColor, 1)
                     end
                 end
             end
-
-            cache.HideFrom(cache.LineIndex)
         end
+
+        cache.HideFrom(cache.LineIndex)
     end
 end
 
-
 -----------------------------------------------------
--- Render loop with visible error reporting
+-- Render loop
 -----------------------------------------------------
-local warned = false
+local errorCount = 0
 local lastEnabled = nil
-local frames = 0
 
 RunService.RenderStepped:Connect(function()
-    frames = frames + 1
-
-    -- Confirm the loop is actually running
-    if frames == 60 then
-        print("[Exhibition ESP] Render loop running for ~1 second. Enabled:", ESP.Settings.Enabled,
-            "| Cached players:", #Players:GetPlayers())
-    end
-
-    -- Confirm the toggle callback is actually flipping our setting
     if ESP.Settings.Enabled ~= lastEnabled then
-        print("[Exhibition ESP] Enabled changed to:", ESP.Settings.Enabled)
+        print("[Exhibition ESP] Enabled changed to: " .. tostring(ESP.Settings.Enabled))
         lastEnabled = ESP.Settings.Enabled
     end
 
     local ok, err = pcall(UpdateESP)
-    if not ok and not warned then
-        warned = true
-        warn("[Exhibition ESP] UpdateESP error (won't repeat): " .. tostring(err))
+    if not ok then
+        errorCount = errorCount + 1
+        if errorCount <= 3 then
+            warn("[Exhibition ESP] Error #" .. errorCount .. ": " .. tostring(err))
+        end
     end
 end)
 
--- Cleanup
+-- Watchdog: if SG gets deleted by anti-cheat, re-parent it
 task.spawn(function()
-    while true do
-        task.wait(0.5)
+    while task.wait(1) do
+        if not sg.Parent then
+            warn("[Exhibition ESP] ScreenGui was destroyed! Attempting re-parent...")
+            pcall(function() sg.Parent = modulesFolder end)
+        end
+    end
+end)
+
+-- Cache cleanup
+task.spawn(function()
+    while task.wait(0.5) do
         for plr, cache in pairs(ESP.Cache) do
             if not plr or not plr.Parent then
                 if cache and cache.Container then pcall(function() cache.Container:Destroy() end) end
@@ -668,12 +608,6 @@ Players.PlayerRemoving:Connect(function(plr)
     end
 end)
 
-Players.PlayerAdded:Connect(function(plr)
-    plr.CharacterAdded:Connect(function(char)
-        PlayerUtils.CleanCharacter(char)
-    end)
-end)
-
-print("[Exhibition ESP] Loaded. Toggle 'Enabled' in the ESP section to test.")
+print("[Exhibition ESP] Loaded. Look for the magenta test square, then toggle 'Enabled' to test.")
 
 return ESP
