@@ -1,13 +1,11 @@
 --[[
-    Exhibition Dynamic ESP  —  ESP_VERSION_5_FAST
+    Exhibition Dynamic ESP  —  ESP_VERSION_6_STABLE
     Fixes:
-      - Fuzzy matcher no longer catastrophically mis-matches "2" to every player.
-      - Characters folder is the primary resolver path (matches 6 different ways).
-      - Debris / Ragdolls folders are skipped during scans.
-      - Bounds sanity check rejects models > 40 studs wide (bad matches).
-      - Resolver result cached per player (0.3s TTL) — no per-frame fuzzy work.
-      - Bounds only recomputed when reference part actually moved.
-      - Diagnostic dumps Characters folder model names + attributes.
+      - Line 559 concat crash (source nil guard)
+      - Orphan ESP: draws boxes on every Characters model that no player matched
+      - Player.CharacterAdded logger — captures spawn even if Character nils out later
+      - Bounds TTL tightened to 0.05s for smooth tracking
+      - Resolver cache 0.3s (miss-cached to avoid per-frame scans)
 ]]
 
 local Players = game:GetService("Players")
@@ -23,22 +21,27 @@ local ESP = {
         BoxMode = "Box",
         EnemyColor = Color3.fromRGB(255, 0, 0),
         FriendColor = Color3.fromRGB(0, 255, 0),
+        OrphanColor = Color3.fromRGB(180, 180, 180),
         TeamCheck = false, TeamColors = false,
         SkeletonColor = Color3.fromRGB(255, 255, 255),
         IncludeAccessories = false,
         SkeletonMode = "Auto",
         BoundsPadding = 0.1,
         MaxBoundsStuds = 40,
+        ShowUnknownCharacters = true,   -- draw on unmatched Characters models
     },
     Cache = {},
+    OrphanCache = {},
     BoundsCache = {},
     BoundsCacheTime = {},
     BoundsRefPos = {},
     ResolverCache = {},
     ResolverCacheTime = {},
+    ResolverCacheSrc = {},
+    CharacterSpawnLog = {},   -- plr -> model captured from CharacterAdded
 }
 
-print("[Exhibition ESP] Loading ESP_VERSION_5_FAST...")
+print("[Exhibition ESP] Loading ESP_VERSION_6_STABLE...")
 
 -----------------------------------------------------
 -- ScreenGui setup
@@ -98,11 +101,28 @@ end
 
 
 -----------------------------------------------------
--- Character resolution
+-- CharacterSpawnLog: capture Player.CharacterAdded
+-----------------------------------------------------
+local function HookPlayerForSpawns(plr)
+    plr.CharacterAdded:Connect(function(char)
+        ESP.CharacterSpawnLog[plr] = char
+        print(string.format("[Exhibition ESP] CharacterAdded: %s spawned as '%s' (parts=%d)",
+            plr.Name, char.Name, #char:GetDescendants()))
+    end)
+    if plr.Character then
+        ESP.CharacterSpawnLog[plr] = plr.Character
+    end
+end
+
+for _, plr in ipairs(Players:GetPlayers()) do HookPlayerForSpawns(plr) end
+Players.PlayerAdded:Connect(HookPlayerForSpawns)
+
+
+-----------------------------------------------------
+-- Resolver
 -----------------------------------------------------
 local SKIP_FOLDERS = {
-    Debris = true, Ragdolls = true, Effects = true, Particles = true,
-    Fx = true, VFX = true, WorkspaceFX = true,
+    Debris = true, Ragdolls = true, Effects = true, Particles = true, Fx = true, VFX = true,
 }
 
 local CharacterMap = {}
@@ -119,28 +139,27 @@ local function LooksLikeCharacter(model)
         or model:FindFirstChild("Torso") ~= nil
 end
 
--- Match a player to any model inside Workspace.Characters using 6 strategies.
 local function TryMatchInCharacters(plr)
     local folder = Workspace:FindFirstChild("Characters")
-    if not folder then return nil end
+    if not folder then return nil, nil end
 
-    -- 1. Exact name match
+    -- Name match
     local byName = folder:FindFirstChild(plr.Name)
     if byName and LooksLikeCharacter(byName) then
         return byName, "Characters[exact]"
     end
 
-    -- 2. Name == UserId (common in custom systems)
+    -- UserId as name
     local byUidName = folder:FindFirstChild(tostring(plr.UserId))
     if byUidName and LooksLikeCharacter(byUidName) then
-        return byUidName, "Characters[UserId-name]"
+        return byUidName, "Characters[UserId]"
     end
 
-    -- 3-6. Per-model inspection
+    -- Per-model inspection
     for _, m in ipairs(folder:GetChildren()) do
         if not LooksLikeCharacter(m) then continue end
 
-        -- 3. Attribute UserId/PlayerId/OwnerId
+        -- Attributes
         local attrUid = m:GetAttribute("UserId")
             or m:GetAttribute("PlayerId")
             or m:GetAttribute("OwnerId")
@@ -149,12 +168,11 @@ local function TryMatchInCharacters(plr)
             return m, "Characters[" .. m.Name .. "].attr"
         end
 
-        -- 4. Child StringValue / ObjectValue
+        -- Value objects
         for _, child in ipairs(m:GetChildren()) do
             if child:IsA("StringValue") then
                 local n = child.Name:lower()
-                if (n == "playername" or n == "owner" or n == "player" or n == "username")
-                   and child.Value == plr.Name then
+                if (n:find("player") or n == "owner" or n == "username") and child.Value == plr.Name then
                     return m, "Characters[" .. m.Name .. "]." .. child.Name
                 end
             elseif child:IsA("ObjectValue") then
@@ -164,26 +182,23 @@ local function TryMatchInCharacters(plr)
             end
         end
 
-        -- 5. Humanoid DisplayName
+        -- Humanoid DisplayName
         local hum = m:FindFirstChildOfClass("Humanoid")
-        if hum then
-            if hum.DisplayName == plr.DisplayName
-               or hum.DisplayName == plr.Name
-               or hum.Name == plr.Name then
-                return m, "Characters[" .. m.Name .. "].Humanoid"
-            end
+        if hum and (hum.DisplayName == plr.DisplayName or hum.DisplayName == plr.Name or hum.Name == plr.Name) then
+            return m, "Characters[" .. m.Name .. "].Humanoid"
         end
 
-        -- 6. Name contains player name (min 4 chars, model name must be short enough)
-        if #plr.Name >= 4 and m.Name:find(plr.Name, 1, true) and #m.Name <= #plr.Name + 6 then
-            return m, "Characters[" .. m.Name .. "].contains"
+        -- Name contains (5+ chars both sides)
+        if #plr.Name >= 5 and #m.Name >= 5 and #m.Name <= #plr.Name + 6 then
+            if m.Name:find(plr.Name, 1, true) or plr.Name:find(m.Name, 1, true) then
+                return m, "Characters[" .. m.Name .. "].contains"
+            end
         end
     end
 
-    return nil
+    return nil, nil
 end
 
--- Cached general scan (only used as last resort)
 local function RefreshCharacterMap()
     local now = os.clock()
     if now - CharacterMapTime < CHARACTER_MAP_TTL then return end
@@ -197,8 +212,8 @@ local function RefreshCharacterMap()
         for _, child in ipairs(children) do
             if SKIP_FOLDERS[child.Name] then continue end
             if child:IsA("Model") then
-                if LooksLikeCharacter(child) then
-                    if not map[child.Name] then map[child.Name] = child end
+                if LooksLikeCharacter(child) and not map[child.Name] then
+                    map[child.Name] = child
                 end
                 scan(child, depth + 1)
             elseif child:IsA("Folder") then
@@ -210,17 +225,17 @@ local function RefreshCharacterMap()
     CharacterMap = map
 end
 
--- The resolver, with 0.3s per-player cache
 local function ResolveCharacter(plr)
     local now = os.clock()
     local cached = ESP.ResolverCache[plr]
     local cachedTime = ESP.ResolverCacheTime[plr] or 0
     if now - cachedTime < RESOLVER_CACHE_TTL then
-        if cached and cached.Parent then
+        if cached and typeof(cached) == "Instance" and cached.Parent then
             return cached, ESP.ResolverCacheSrc[plr] or "cached"
         end
         if cached == false then
-            return nil, ESP.ResolverCacheSrc[plr] or "cached-miss"
+            local src = ESP.ResolverCacheSrc[plr]
+            return nil, src and tostring(src) or "cached-miss"
         end
     end
 
@@ -231,12 +246,21 @@ local function ResolveCharacter(plr)
         result, source = plr.Character, "Player.Character"
     end
 
-    -- Path 2: Characters folder with all strategies
+    -- Path 2: CharacterSpawnLog (captured via CharacterAdded)
     if not result then
-        result, source = TryMatchInCharacters(plr)
+        local captured = ESP.CharacterSpawnLog[plr]
+        if captured and typeof(captured) == "Instance" and captured.Parent then
+            result, source = captured, "CharacterAdded log"
+        end
     end
 
-    -- Path 3: Direct Workspace child
+    -- Path 3: Characters folder
+    if not result then
+        local m, s = TryMatchInCharacters(plr)
+        if m then result, source = m, s or "Characters" end
+    end
+
+    -- Path 4: Direct Workspace child
     if not result then
         local direct = Workspace:FindFirstChild(plr.Name)
         if direct and LooksLikeCharacter(direct) then
@@ -244,33 +268,30 @@ local function ResolveCharacter(plr)
         end
     end
 
-    -- Path 4: UserId attribute anywhere (cached map)
+    -- Path 5: cached map by UserId-name
     if not result then
         RefreshCharacterMap()
         local byUid = CharacterMap[tostring(plr.UserId)]
         if byUid and byUid.Parent then
-            result, source = byUid, "Cached[UserId-name]"
+            result, source = byUid, "Cached[UserId]"
         end
     end
 
-    -- Path 5: Exact name in cached map
+    -- Path 6: cached exact name
     if not result then
         local byName = CharacterMap[plr.Name]
         if byName and byName.Parent then
-            result, source = byName, "Cached[exact-name]"
+            result, source = byName, "Cached[exact]"
         end
     end
 
-    -- Path 6: SUBSTRING fuzzy, requires 5+ chars in BOTH directions
+    -- Path 7: strict fuzzy — 5+ chars both, within 4 chars of length
     if not result then
         for name, model in pairs(CharacterMap) do
-            if model.Parent and #name >= 5 and #plr.Name >= 5 then
+            if model.Parent and #name >= 5 and #plr.Name >= 5 and math.abs(#name - #plr.Name) <= 4 then
                 if name:find(plr.Name, 1, true) or plr.Name:find(name, 1, true) then
-                    -- Must be within 4 chars of each other
-                    if math.abs(#name - #plr.Name) <= 4 then
-                        result, source = model, "Fuzzy[" .. name .. "]"
-                        break
-                    end
+                    result, source = model, "Fuzzy[" .. name .. "]"
+                    break
                 end
             end
         end
@@ -278,10 +299,9 @@ local function ResolveCharacter(plr)
 
     ESP.ResolverCache[plr] = result or false
     ESP.ResolverCacheTime[plr] = now
-    ESP.ResolverCacheSrc = ESP.ResolverCacheSrc or {}
-    ESP.ResolverCacheSrc[plr] = source
+    ESP.ResolverCacheSrc[plr] = source or "unresolved"
 
-    return result, source
+    return result, source or "unresolved"
 end
 
 
@@ -338,7 +358,6 @@ function PlayerUtils.GetBoundingBox(character)
         end
     end
 
-    -- SANITY CHECK — reject bad matches
     local dims = max - min
     if dims.X > ESP.Settings.MaxBoundsStuds
        or dims.Y > ESP.Settings.MaxBoundsStuds
@@ -380,8 +399,8 @@ function PlayerUtils.GetScreenBox(box, camera)
     return minX, minY, maxX, maxY
 end
 
-local BOUNDS_TTL = 0.15       -- tighter than before → box tracks movement
-local BOUNDS_MOVE_EPS = 0.15  -- studs before recompute
+local BOUNDS_TTL = 0.05
+local BOUNDS_MOVE_EPS = 0.08
 
 function PlayerUtils.GetCachedBoundingBox(character)
     local now = os.clock()
@@ -390,7 +409,6 @@ function PlayerUtils.GetCachedBoundingBox(character)
     local refPos = ESP.BoundsRefPos[character]
 
     if cached and refPos and now - cachedTime < BOUNDS_TTL then
-        -- If the reference part hasn't moved, reuse
         if cached.Ref and cached.Ref.Parent and (cached.Ref.Position - refPos).Magnitude < BOUNDS_MOVE_EPS then
             return cached
         end
@@ -399,50 +417,8 @@ function PlayerUtils.GetCachedBoundingBox(character)
     local box = PlayerUtils.GetBoundingBox(character)
     ESP.BoundsCache[character] = box
     ESP.BoundsCacheTime[character] = now
-    if box and box.Ref then
-        ESP.BoundsRefPos[character] = box.Ref.Position
-    end
+    if box and box.Ref then ESP.BoundsRefPos[character] = box.Ref.Position end
     return box
-end
-
-
------------------------------------------------------
--- Skeleton links
------------------------------------------------------
-local R6_LINKS = {
-    { "Head", "Torso" }, { "Torso", "Left Arm" }, { "Torso", "Right Arm" },
-    { "Torso", "Left Leg" }, { "Torso", "Right Leg" },
-}
-local R15_LINKS = {
-    { "Head", "UpperTorso" }, { "UpperTorso", "LowerTorso" },
-    { "UpperTorso", "LeftUpperArm" }, { "LeftUpperArm", "LeftLowerArm" }, { "LeftLowerArm", "LeftHand" },
-    { "UpperTorso", "RightUpperArm" }, { "RightUpperArm", "RightLowerArm" }, { "RightLowerArm", "RightHand" },
-    { "LowerTorso", "LeftUpperLeg" }, { "LeftUpperLeg", "LeftLowerLeg" }, { "LeftLowerLeg", "LeftFoot" },
-    { "LowerTorso", "RightUpperLeg" }, { "RightUpperLeg", "RightLowerLeg" }, { "RightLowerLeg", "RightFoot" },
-}
-
-local function GetSkeletonLinks(character)
-    local mode = ESP.Settings.SkeletonMode
-    if mode == "R6" then return R6_LINKS end
-    if mode == "R15" then return R15_LINKS end
-    if character:FindFirstChild("UpperTorso") then return R15_LINKS end
-    if character:FindFirstChild("Torso") and character:FindFirstChild("Head") then return R6_LINKS end
-    local links, seen = {}, {}
-    for _, joint in ipairs(character:GetDescendants()) do
-        if joint:IsA("Motor6D") or joint:IsA("Weld") then
-            local p0, p1 = joint.Part0, joint.Part1
-            if p0 and p1 and p0:IsA("BasePart") and p1:IsA("BasePart") then
-                if IsAccessoryPart(p0) or IsAccessoryPart(p1) then continue end
-                if IsToolPart(p0) or IsToolPart(p1) then continue end
-                local key = p0.Name .. "|" .. p1.Name
-                if not seen[key] then
-                    seen[key] = true
-                    table.insert(links, { p0.Name, p1.Name })
-                end
-            end
-        end
-    end
-    return links
 end
 
 
@@ -509,22 +485,6 @@ local function DrawRect(cache, x, y, w, h, col, trans)
     cache.LineIndex = cache.LineIndex + 1
 end
 
-local function DrawRotatedLine(cache, p1, p2, color, thickness)
-    local l = cache.Lines[cache.LineIndex]
-    if not l then return end
-    local distance = (p1 - p2).Magnitude
-    if distance < 0.5 then cache.LineIndex = cache.LineIndex + 1; return end
-    l.Visible = true
-    local center = (p1 + p2) / 2
-    local angle = math.atan2(p2.Y - p1.Y, p2.X - p1.X)
-    l.Size = UDim2.new(0, distance, 0, thickness or 1)
-    l.Position = UDim2.new(0, center.X - distance / 2, 0, center.Y - (thickness or 1) / 2)
-    l.Rotation = math.deg(angle)
-    l.BackgroundColor3 = color
-    l.BackgroundTransparency = 0
-    cache.LineIndex = cache.LineIndex + 1
-end
-
 local function DrawBorderedRect(cache, x, y, ex, ey, thickness, outCol, outTrans)
     DrawRect(cache, x - thickness, y - thickness, (ex - x) + thickness * 2, thickness, outCol, outTrans)
     DrawRect(cache, x - thickness, ey, (ex - x) + thickness * 2, thickness, outCol, outTrans)
@@ -532,16 +492,68 @@ local function DrawBorderedRect(cache, x, y, ex, ey, thickness, outCol, outTrans
     DrawRect(cache, ex, y, thickness, ey - y, outCol, outTrans)
 end
 
+-- Generic box draw: reused for players and orphans
+local function DrawBoxFor(cache, box3d, camera, color, name, hpProg)
+    local minX, minY, maxX, maxY = PlayerUtils.GetScreenBox(box3d, camera)
+    if not minX or maxX <= minX or maxY <= minY then return false end
+
+    cache.Container.Visible = true
+    cache.LineIndex = 1
+    cache.Name.Visible = false; cache.Item.Visible = false; cache.HealthOuter.Visible = false
+
+    local x, y, ex, ey = minX, minY, maxX, maxY
+
+    if ESP.Settings.Boxes then
+        if ESP.Settings.BoxMode == "Box" then
+            DrawBorderedRect(cache, x - 1, y - 1, ex + 1, ey + 1, 1, Colors.BlackTrans, BLACK_TRANS)
+            DrawBorderedRect(cache, x + 1, y + 1, ex - 1, ey - 1, 1, Colors.BlackTrans, BLACK_TRANS)
+            DrawBorderedRect(cache, x, y, ex, ey, 1, color, 0)
+        else
+            local len = (ex - x) / 4
+            local vLen = (ey - y) / 4
+            DrawRect(cache, x, y, 1, vLen, color, 0); DrawRect(cache, x, y, len, 1, color, 0)
+            DrawRect(cache, ex, y, 1, vLen, color, 0); DrawRect(cache, ex - len, y, len, 1, color, 0)
+            DrawRect(cache, x, ey - vLen, 1, vLen, color, 0); DrawRect(cache, x, ey, len, 1, color, 0)
+            DrawRect(cache, ex, ey - vLen, 1, vLen, color, 0); DrawRect(cache, ex - len, ey, len, 1, color, 0)
+        end
+    end
+
+    if hpProg and ESP.Settings.Health then
+        cache.HealthOuter.Visible = true
+        local diff = ey - y
+        cache.HealthOuter.Position = UDim2.new(0, x - 6, 0, y)
+        cache.HealthOuter.Size = UDim2.new(0, 4, 0, diff)
+        cache.HealthFill.BackgroundColor3 = BlendColors(hpProg)
+        cache.HealthFill.Position = UDim2.new(0, 1, 0, 1 + (diff - 2) * (1 - hpProg))
+        cache.HealthFill.Size = UDim2.new(1, -2, 0, math.max(0, (diff - 2) * hpProg))
+    end
+
+    if name and ESP.Settings.Names then
+        cache.Name.Visible = true
+        cache.Name.Text = name
+        cache.Name.TextColor3 = color
+        cache.Name.Position = UDim2.new(0, x + (ex - x) / 2, 0, y - 3)
+    end
+
+    cache.HideFrom(cache.LineIndex)
+    return true
+end
+
 
 -----------------------------------------------------
--- Update
+-- Update loop
 -----------------------------------------------------
+local matchedModelsThisFrame = {}
 local lastSkipReason = {}
 
 local function UpdateESP()
     local camera = Workspace.CurrentCamera
     if not camera then return end
 
+    -- Reset matched models
+    for k in pairs(matchedModelsThisFrame) do matchedModelsThisFrame[k] = nil end
+
+    -- Player pass
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr == LocalPlayer then continue end
         if not ESP.Cache[plr] then ESP.Cache[plr] = CreateESPCache() end
@@ -554,11 +566,15 @@ local function UpdateESP()
         end
 
         local char, source = ResolveCharacter(plr)
+        source = tostring(source or "unknown")   -- ← CRASH FIX
+
         if not char then
             cache.Container.Visible = false; cache.Hide()
             lastSkipReason[plr] = "no char (" .. source .. ")"
             continue
         end
+
+        matchedModelsThisFrame[char] = plr
 
         local hum = char:FindFirstChildOfClass("Humanoid")
         if hum and hum.Health <= 0 then
@@ -576,84 +592,51 @@ local function UpdateESP()
         local box3d = PlayerUtils.GetCachedBoundingBox(char)
         if not box3d then
             cache.Container.Visible = false; cache.Hide()
-            lastSkipReason[plr] = "no bounds / bad match"
+            lastSkipReason[plr] = "no bounds"
             continue
         end
-
-        local minX, minY, maxX, maxY = PlayerUtils.GetScreenBox(box3d, camera)
-        if not minX or maxX <= minX or maxY <= minY then
-            cache.Container.Visible = false; cache.Hide()
-            lastSkipReason[plr] = "offscreen"
-            continue
-        end
-
-        lastSkipReason[plr] = nil
-        cache.Container.Visible = true
-        cache.LineIndex = 1
-        cache.Name.Visible = false; cache.Item.Visible = false; cache.HealthOuter.Visible = false
 
         local color = GetPlayerColor(plr)
-        local x, y, ex, ey = minX, minY, maxX, maxY
+        local displayName = (plr.DisplayName ~= "" and plr.DisplayName) or plr.Name
+        local hpProg = hum and math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1) or nil
 
-        if ESP.Settings.Boxes then
-            if ESP.Settings.BoxMode == "Box" then
-                DrawBorderedRect(cache, x - 1, y - 1, ex + 1, ey + 1, 1, Colors.BlackTrans, BLACK_TRANS)
-                DrawBorderedRect(cache, x + 1, y + 1, ex - 1, ey - 1, 1, Colors.BlackTrans, BLACK_TRANS)
-                DrawBorderedRect(cache, x, y, ex, ey, 1, color, 0)
-            elseif ESP.Settings.BoxMode == "Corner A" or ESP.Settings.BoxMode == "Split" then
-                local len = (ex - x) / 4
-                local vLen = (ey - y) / 4
-                DrawRect(cache, x, y, 1, vLen, color, 0); DrawRect(cache, x, y, len, 1, color, 0)
-                DrawRect(cache, ex, y, 1, vLen, color, 0); DrawRect(cache, ex - len, y, len, 1, color, 0)
-                DrawRect(cache, x, ey - vLen, 1, vLen, color, 0); DrawRect(cache, x, ey, len, 1, color, 0)
-                DrawRect(cache, ex, ey - vLen, 1, vLen, color, 0); DrawRect(cache, ex - len, ey, len, 1, color, 0)
-            end
+        local drawn = DrawBoxFor(cache, box3d, camera, color, displayName, hpProg)
+        if drawn then
+            lastSkipReason[plr] = nil
+        else
+            cache.Container.Visible = false; cache.Hide()
+            lastSkipReason[plr] = "offscreen"
         end
+    end
 
-        if ESP.Settings.Health and hum then
-            cache.HealthOuter.Visible = true
-            local maxHp = hum.MaxHealth
-            if maxHp <= 0 then maxHp = 100 end
-            local prog = math.clamp(hum.Health / maxHp, 0, 1)
-            local diff = ey - y
-            cache.HealthOuter.Position = UDim2.new(0, x - 6, 0, y)
-            cache.HealthOuter.Size = UDim2.new(0, 4, 0, diff)
-            cache.HealthFill.BackgroundColor3 = BlendColors(prog)
-            cache.HealthFill.Position = UDim2.new(0, 1, 0, 1 + (diff - 2) * (1 - prog))
-            cache.HealthFill.Size = UDim2.new(1, -2, 0, math.max(0, (diff - 2) * prog))
-        end
+    -- Orphan pass — draw on any Characters folder model not matched to a player
+    if ESP.Settings.ShowUnknownCharacters then
+        local charsFolder = Workspace:FindFirstChild("Characters")
+        if charsFolder then
+            for _, m in ipairs(charsFolder:GetChildren()) do
+                if not m:IsA("Model") then continue end
+                if matchedModelsThisFrame[m] then continue end
 
-        if ESP.Settings.Names then
-            cache.Name.Visible = true
-            cache.Name.Text = (plr.DisplayName ~= "" and plr.DisplayName) or plr.Name
-            cache.Name.TextColor3 = ESP.Settings.TeamColors and color or Color3.new(1, 1, 1)
-            cache.Name.Position = UDim2.new(0, x + (ex - x) / 2, 0, y - 3)
-        end
+                if not ESP.OrphanCache[m] then ESP.OrphanCache[m] = CreateESPCache() end
+                local cache = ESP.OrphanCache[m]
 
-        if ESP.Settings.Items then
-            local tool = char:FindFirstChildOfClass("Tool")
-            if tool then
-                cache.Item.Visible = true
-                cache.Item.Text = tool.Name
-                cache.Item.Position = UDim2.new(0, x + (ex - x) / 2, 0, ey + 3)
-            end
-        end
+                if not ESP.Settings.Enabled then
+                    cache.Container.Visible = false; cache.Hide()
+                    continue
+                end
 
-        if ESP.Settings.Skeleton then
-            for _, link in ipairs(GetSkeletonLinks(char)) do
-                local p1 = char:FindFirstChild(link[1])
-                local p2 = char:FindFirstChild(link[2])
-                if p1 and p2 then
-                    local s1, v1 = camera:WorldToViewportPoint(p1.Position)
-                    local s2, v2 = camera:WorldToViewportPoint(p2.Position)
-                    if v1 or v2 then
-                        DrawRotatedLine(cache, Vector2.new(s1.X, s1.Y), Vector2.new(s2.X, s2.Y), ESP.Settings.SkeletonColor, 1)
-                    end
+                local box3d = PlayerUtils.GetCachedBoundingBox(m)
+                if not box3d then
+                    cache.Container.Visible = false; cache.Hide()
+                    continue
+                end
+
+                local drawn = DrawBoxFor(cache, box3d, camera, ESP.Settings.OrphanColor, "??? (" .. m.Name .. ")", nil)
+                if not drawn then
+                    cache.Container.Visible = false; cache.Hide()
                 end
             end
         end
-
-        cache.HideFrom(cache.LineIndex)
     end
 end
 
@@ -662,48 +645,46 @@ end
 -- Diagnostic
 -----------------------------------------------------
 function ESP:Diagnose()
-    print("════════ ESP DIAGNOSTIC V5 ════════")
-    print("Enabled:", ESP.Settings.Enabled)
+    print("════════ ESP DIAGNOSTIC V6 ════════")
+    print("Enabled:", ESP.Settings.Enabled, "| ShowUnknown:", ESP.Settings.ShowUnknownCharacters)
 
     local chars = Workspace:FindFirstChild("Characters")
     if chars then
-        print("Characters folder contents:")
+        print("Characters folder (", #chars:GetChildren(), "children):")
         for _, m in ipairs(chars:GetChildren()) do
             local hum = m:FindFirstChildOfClass("Humanoid")
-            local attrs = m:GetAttributes()
-            local attrStr = ""
-            for k, v in pairs(attrs) do attrStr = attrStr .. k .. "=" .. tostring(v) .. " " end
             local parts = 0
             if m:IsA("Model") then
                 for _, d in ipairs(m:GetDescendants()) do
                     if d:IsA("BasePart") then parts = parts + 1 end
                 end
             end
-            print(string.format("  '%s' (%s) hum=%s parts=%d attrs={%s}",
-                m.Name, m.ClassName, hum and "yes" or "no", parts, attrStr))
+            print(string.format("  '%s' hum=%s parts=%d", m.Name, hum and "yes" or "no", parts))
         end
     else
-        print("No 'Characters' folder found!")
+        print("No 'Characters' folder")
     end
 
-    print("Total players:", #Players:GetPlayers())
+    print("Players:")
     for _, plr in ipairs(Players:GetPlayers()) do
-        if plr == LocalPlayer then print("  [SELF] " .. plr.Name); continue end
+        if plr == LocalPlayer then
+            print("  [SELF]", plr.Name)
+            continue
+        end
         local char, source = ResolveCharacter(plr)
+        local spawnLog = ESP.CharacterSpawnLog[plr]
         if not char then
-            print(string.format("  [%s] NOT FOUND (%s)", plr.Name, source))
+            print(string.format("  [%s] NOT FOUND (%s) | CharacterAdded log: %s",
+                plr.Name, tostring(source), spawnLog and spawnLog.Name or "none"))
             continue
         end
         local box = PlayerUtils.GetCachedBoundingBox(char)
         if not box then
-            print(string.format("  [%s] FOUND via %s, but BOUNDS rejected (bad match)", plr.Name, source))
+            print(string.format("  [%s] FOUND via %s, but bounds rejected", plr.Name, tostring(source)))
             continue
         end
         local dim = box.Max - box.Min
-        local minX, minY, maxX, maxY = PlayerUtils.GetScreenBox(box, Workspace.CurrentCamera)
-        local screenStr = minX and string.format("(%.0f,%.0f)-(%.0f,%.0f)", minX, minY, maxX, maxY) or "offscreen"
-        print(string.format("  [%s] via %s | box=%.1fx%.1fx%.1f | %s",
-            plr.Name, source, dim.X, dim.Y, dim.Z, screenStr))
+        print(string.format("  [%s] via %s | box=%.1fx%.1fx%.1f", plr.Name, tostring(source), dim.X, dim.Y, dim.Z))
     end
     print("════════════════════════════════")
 end
@@ -717,29 +698,16 @@ RunService.RenderStepped:Connect(function()
     if ESP.Settings.Enabled ~= lastEnabled then
         print("[Exhibition ESP] Enabled changed to: " .. tostring(ESP.Settings.Enabled))
         lastEnabled = ESP.Settings.Enabled
-        if ESP.Settings.Enabled then
-            task.delay(1, function() ESP:Diagnose() end)
-        end
+        if ESP.Settings.Enabled then task.delay(1, function() ESP:Diagnose() end) end
     end
     local ok, err = pcall(UpdateESP)
     if not ok then
         errorCount = errorCount + 1
-        if errorCount <= 3 then
+        if errorCount <= 5 then
             warn("[Exhibition ESP] Error #" .. errorCount .. ": " .. tostring(err))
         end
     end
 end)
 
-task.spawn(function()
-    while task.wait(0.5) do
-        for plr, cache in pairs(ESP.Cache) do
-            if not plr or not plr.Parent then
-                if cache and cache.Container then pcall(function() cache.Container:Destroy() end) end
-                ESP.Cache[plr] = nil
-            end
-        end
-    end
-end)
-
-print("[Exhibition ESP] Loaded. V5 resolver + fast bounds.")
+print("[Exhibition ESP] Loaded v6. Enable 'Show Unknown Characters' to see the 6 rigs in Characters/.")
 return ESP
