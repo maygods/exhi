@@ -1,11 +1,17 @@
 --[[
-    Exhibition Dynamic ESP
-    ESP_VERSION_3_DIAGNOSTIC
+    Exhibition Dynamic ESP  —  ESP_VERSION_4_RESOLVER
 
-    Changes:
-      - Humanoid is no longer required to draw a box.
-      - Prints a full per-player diagnostic when Enabled flips to true.
-      - Adds ESP:Diagnose() callable manually.
+    Why v3 didn't draw: every non-local player had Player.Character == nil
+    (custom spawn system). This version resolves characters by fallback:
+      1. Player.Character (standard)
+      2. Workspace[Player.Name]
+      3. Workspace.<CommonFolder>[Player.Name]
+         (Characters, Alive, Players, Entities, Chars, ...)
+      4. Attribute match on UserId/PlayerId/OwnerId
+      5. Breadth-limited scan of Workspace (cached 2s, shared across players)
+      6. Substring fuzzy match against cached map
+
+    Diagnostic now shows exactly which path found each character.
 ]]
 
 local Players = game:GetService("Players")
@@ -30,8 +36,11 @@ local ESP = {
     Cache = {}, BoundsCache = {}, BoundsCacheTime = {},
 }
 
-print("[Exhibition ESP] Loading ESP_VERSION_3_DIAGNOSTIC...")
+print("[Exhibition ESP] Loading ESP_VERSION_4_RESOLVER...")
 
+-----------------------------------------------------
+-- ScreenGui setup (working parent path)
+-----------------------------------------------------
 local sg = Instance.new("ScreenGui")
 local charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 local randName = ""
@@ -51,7 +60,6 @@ if not modulesFolder then
     modulesFolder.Parent = targetParent
 end
 sg.Parent = modulesFolder
-print("[Exhibition ESP] ScreenGui parented to: " .. modulesFolder:GetFullName())
 
 sg.AncestryChanged:Connect(function(_, parent)
     if not parent and sg.Parent ~= modulesFolder then
@@ -86,6 +94,121 @@ local function BlendColors(progress)
     end
 end
 
+
+-----------------------------------------------------
+-- Character resolution (the fix)
+-----------------------------------------------------
+local CharacterMap = {}
+local CharacterMapTime = 0
+local CHARACTER_MAP_TTL = 2.0
+local lastResolveSource = {}   -- plr -> "path used"
+
+local function LooksLikeCharacter(model)
+    if not model:IsA("Model") then return false end
+    return model:FindFirstChildOfClass("Humanoid") ~= nil
+        or model:FindFirstChild("HumanoidRootPart") ~= nil
+        or model:FindFirstChild("Head") ~= nil
+        or model:FindFirstChild("Torso") ~= nil
+        or model:FindFirstChild("UpperTorso") ~= nil
+end
+
+-- Scan Workspace up to 3 levels deep. Only called once per TTL window.
+local function RefreshCharacterMap()
+    local now = os.clock()
+    if now - CharacterMapTime < CHARACTER_MAP_TTL then return end
+    CharacterMapTime = now
+
+    local map = {}
+
+    local function scan(container, depth)
+        if depth > 3 then return end
+        local ok, children = pcall(function() return container:GetChildren() end)
+        if not ok then return end
+        for _, child in ipairs(children) do
+            if child:IsA("Model") then
+                if LooksLikeCharacter(child) then
+                    if not map[child.Name] then
+                        map[child.Name] = child
+                    end
+                end
+                scan(child, depth + 1)
+            elseif child:IsA("Folder") then
+                scan(child, depth + 1)
+            end
+        end
+    end
+
+    scan(Workspace, 0)
+
+    -- Also map by UserId attribute
+    for _, child in ipairs(Workspace:GetDescendants()) do
+        if child:IsA("Model") and LooksLikeCharacter(child) then
+            local uid = child:GetAttribute("UserId") or child:GetAttribute("PlayerId") or child:GetAttribute("OwnerId")
+            if uid then
+                map["UID_" .. tostring(uid)] = child
+            end
+        end
+    end
+
+    CharacterMap = map
+end
+
+-- Layered resolver: returns (character, sourceString)
+local function ResolveCharacter(plr)
+    -- 1. Standard Player.Character
+    if plr.Character then
+        return plr.Character, "Player.Character"
+    end
+
+    -- 2. Direct child of Workspace by player name
+    local direct = Workspace:FindFirstChild(plr.Name)
+    if direct and LooksLikeCharacter(direct) then
+        return direct, "Workspace." .. plr.Name
+    end
+
+    -- 3. Common character folders
+    local commonFolders = {
+        "Characters", "Alive", "Players", "Entities", "Chars",
+        "PlayerCharacters", "GameCharacters", "Live", "Active", "CharacterFolder",
+    }
+    for _, fname in ipairs(commonFolders) do
+        local folder = Workspace:FindFirstChild(fname)
+        if folder then
+            local m = folder:FindFirstChild(plr.Name)
+            if m and LooksLikeCharacter(m) then
+                return m, "Workspace." .. fname .. "." .. plr.Name
+            end
+        end
+    end
+
+    -- 4. Attribute match (UserId / PlayerId / OwnerId) via cached map
+    RefreshCharacterMap()
+    local byUid = CharacterMap["UID_" .. tostring(plr.UserId)]
+    if byUid and byUid.Parent then
+        return byUid, "Attribute UserId"
+    end
+
+    -- 5. Cached name map
+    local byName = CharacterMap[plr.Name]
+    if byName and byName.Parent then
+        return byName, "Cached name map"
+    end
+
+    -- 6. Fuzzy substring match (last resort)
+    for name, model in pairs(CharacterMap) do
+        if not name:find("^UID_") and model.Parent then
+            if name:find(plr.Name, 1, true) or plr.Name:find(name, 1, true) then
+                return model, "Fuzzy: " .. name
+            end
+        end
+    end
+
+    return nil, "unresolved"
+end
+
+-----------------------------------------------------
+-- Body utilities
+-----------------------------------------------------
 local PlayerUtils = {}
 
 local function IsAccessoryPart(part)
@@ -182,11 +305,9 @@ function PlayerUtils.GetCachedBoundingBox(character)
     return box
 end
 
-function PlayerUtils.CleanCharacter(character)
-    ESP.BoundsCache[character] = nil
-    ESP.BoundsCacheTime[character] = nil
-end
-
+-----------------------------------------------------
+-- Skeleton links
+-----------------------------------------------------
 local R6_LINKS = {
     { "Head", "Torso" }, { "Torso", "Left Arm" }, { "Torso", "Right Arm" },
     { "Torso", "Left Leg" }, { "Torso", "Right Leg" },
@@ -223,6 +344,9 @@ local function GetSkeletonLinks(character)
     return links
 end
 
+-----------------------------------------------------
+-- Drawables
+-----------------------------------------------------
 local LINE_POOL_SIZE = 120
 
 local function CreateESPCache()
@@ -311,7 +435,9 @@ local function DrawBorderedRect(cache, x, y, ex, ey, thickness, outCol, outTrans
     DrawRect(cache, ex, y, thickness, ey - y, outCol, outTrans)
 end
 
--- Per-player reason the last frame skipped drawing
+-----------------------------------------------------
+-- Update
+-----------------------------------------------------
 local lastSkipReason = {}
 
 local function UpdateESP()
@@ -329,14 +455,14 @@ local function UpdateESP()
             continue
         end
 
-        local char = plr.Character
+        local char, source = ResolveCharacter(plr)
+        lastResolveSource[plr] = source
         if not char then
             cache.Container.Visible = false; cache.Hide()
-            lastSkipReason[plr] = "no character"
+            lastSkipReason[plr] = "no character (" .. source .. ")"
             continue
         end
 
-        -- NOTE: Humanoid no longer required. Only skip if clearly dead.
         local hum = char:FindFirstChildOfClass("Humanoid")
         if hum and hum.Health <= 0 then
             cache.Container.Visible = false; cache.Hide()
@@ -353,7 +479,7 @@ local function UpdateESP()
         local box3d = PlayerUtils.GetCachedBoundingBox(char)
         if not box3d then
             cache.Container.Visible = false; cache.Hide()
-            lastSkipReason[plr] = "no bounds"
+            lastSkipReason[plr] = "no bounds (no visible parts)"
             continue
         end
 
@@ -435,74 +561,66 @@ local function UpdateESP()
     end
 end
 
--- Manual diagnostic
+-----------------------------------------------------
+-- Diagnostic (shows where characters live)
+-----------------------------------------------------
 function ESP:Diagnose()
     print("════════ ESP DIAGNOSTIC ════════")
     print("Enabled:", ESP.Settings.Enabled)
     print("ScreenGui Parent:", sg.Parent and sg.Parent:GetFullName() or "NIL!")
-    print("ScreenGui Enabled:", sg.Enabled)
-    local cam = Workspace.CurrentCamera
-    print("Camera:", cam and ("pos " .. tostring(cam.CFrame.Position)) or "NIL!")
-    local players = Players:GetPlayers()
-    print("Total players:", #players)
-    for _, plr in ipairs(players) do
+
+    -- Dump top-level Workspace structure
+    print("Workspace top-level children:")
+    for _, child in ipairs(Workspace:GetChildren()) do
+        local class = child.ClassName
+        local count = 0
+        if child:IsA("Folder") or child:IsA("Model") then
+            local ok, c = pcall(function() return #child:GetChildren() end)
+            if ok then count = c end
+        end
+        print(string.format("  %s (%s) children=%d", child.Name, class, count))
+    end
+
+    print("Total players:", #Players:GetPlayers())
+    for _, plr in ipairs(Players:GetPlayers()) do
         if plr == LocalPlayer then
             print("  [SELF] " .. plr.Name)
             continue
         end
-        local char = plr.Character
+        local char, source = ResolveCharacter(plr)
         if not char then
-            print("  [" .. plr.Name .. "] NO CHARACTER (Character=nil)")
+            print(string.format("  [%s] NOT FOUND (Player.Character=%s, source=%s)",
+                plr.Name, tostring(plr.Character), source))
             continue
         end
         local hum = char:FindFirstChildOfClass("Humanoid")
         local parts = PlayerUtils.GetBodyParts(char)
-        local totalDescendants = #char:GetDescendants()
-        local totalBaseParts = 0
-        for _, d in ipairs(char:GetDescendants()) do
-            if d:IsA("BasePart") then totalBaseParts = totalBaseParts + 1 end
-        end
-        print(string.format("  [%s] parts=%d, totalBaseParts=%d, descendants=%d, humanoid=%s",
-            plr.Name, #parts, totalBaseParts, totalDescendants,
-            hum and ("HP=" .. hum.Health .. "/" .. hum.MaxHealth) or "NONE"))
-        if #parts == 0 then
-            print("    → GetBodyParts returned 0. Character has no visible BaseParts.")
-            continue
-        end
-        local box = PlayerUtils.GetCachedBoundingBox(char)
-        if not box then
-            print("    → Bounds nil (should not happen if parts>0)")
-            continue
-        end
-        print(string.format("    → Bounds Y %.2f..%.2f, size %.2f x %.2f x %.2f",
-            box.Min.Y, box.Max.Y,
-            box.Max.X - box.Min.X, box.Max.Y - box.Min.Y, box.Max.Z - box.Min.Z))
-        local minX, minY, maxX, maxY = PlayerUtils.GetScreenBox(box, cam)
-        if not minX then
-            print("    → Screen box nil (all corners behind camera?)")
-            local p1 = parts[1]
-            if p1 then
-                local sp, on = cam:WorldToViewportPoint(p1.Position)
-                print(string.format("    → Ref part '%s' at screen %.0f,%.0f on=%s Z=%.2f",
-                    p1.Name, sp.X, sp.Y, tostring(on), sp.Z))
-            end
-        else
-            print(string.format("    → Screen box: (%.0f,%.0f) to (%.0f,%.0f) size %.0fx%.0f",
-                minX, minY, maxX, maxY, maxX - minX, maxY - minY))
-            if maxX <= minX or maxY <= minY then
-                print("    → WARNING: degenerate box")
+        print(string.format("  [%s] FOUND via %s | parts=%d | hp=%s",
+            plr.Name, source, #parts,
+            hum and tostring(hum.Health) or "no-hum"))
+        if #parts > 0 then
+            local box = PlayerUtils.GetBoundingBox(char)
+            if box then
+                local minX, minY, maxX, maxY = PlayerUtils.GetScreenBox(box, Workspace.CurrentCamera)
+                if minX then
+                    print(string.format("    → Screen: (%.0f,%.0f)-(%.0f,%.0f) size %.0fx%.0f",
+                        minX, minY, maxX, maxY, maxX - minX, maxY - minY))
+                else
+                    print("    → Offscreen")
+                end
             end
         end
         local reason = lastSkipReason[plr]
-        if reason then
-            print("    → Last skip reason: " .. reason)
-        else
-            print("    → Last frame: DRAWN")
-        end
+        if reason then print("    → skip: " .. reason) else print("    → DRAWN") end
     end
     print("════════════════════════════════")
 end
 
+_G.ESP = ESP
+
+-----------------------------------------------------
+-- Loops
+-----------------------------------------------------
 local errorCount = 0
 local lastEnabled = nil
 
@@ -534,15 +652,5 @@ task.spawn(function()
     end
 end)
 
-Players.PlayerRemoving:Connect(function(plr)
-    if ESP.Cache[plr] then
-        pcall(function() ESP.Cache[plr].Container:Destroy() end)
-        ESP.Cache[plr] = nil
-    end
-end)
-
-print("[Exhibition ESP] Loaded. Toggle Enabled — diagnostic will print after 1s.")
-print("[Exhibition ESP] You can also call _G.ESP:Diagnose() anytime.")
-
-_G.ESP = ESP
+print("[Exhibition ESP] Loaded. Toggle Enabled — resolver will find Workspace characters.")
 return ESP
